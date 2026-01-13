@@ -1,10 +1,9 @@
 import React from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  LineChart, Line 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
 import { Activity, Cpu, Server, Zap, CheckCircle, AlertTriangle } from 'lucide-react';
-import { Task, ResourceNode } from '../types';
+import { Task, ResourceNode, TaskStatus } from '../types';
 
 interface DashboardProps {
   tasks: Task[];
@@ -13,9 +12,11 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ tasks, resources, t }) => {
-  const activeTasks = tasks.filter(t => t.status === 'Running').length;
-  const pendingTasks = tasks.filter(t => t.status === 'Pending').length;
-  const avgLoad = Math.round(resources.reduce((acc, curr) => acc + curr.load, 0) / resources.length);
+  const activeTasks = tasks.filter(t => t.status === TaskStatus.Running).length;
+  // Use length of resources or default to 0 if data not available yet
+  const avgLoad = resources.length > 0 
+    ? Math.round(resources.reduce((acc, curr) => acc + curr.load, 0) / resources.length)
+    : 0;
   
   // Data for charts
   const resourceData = resources.map(r => ({
@@ -25,10 +26,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, resources, t }) => {
   }));
 
   const taskStatusData = [
-    { name: 'Pending', count: tasks.filter(t => t.status === 'Pending').length },
-    { name: 'Running', count: tasks.filter(t => t.status === 'Running').length },
-    { name: 'Completed', count: tasks.filter(t => t.status === 'Completed').length },
-    { name: 'Failed', count: tasks.filter(t => t.status === 'Failed').length },
+    { name: 'Pending', count: tasks.filter(t => t.status === TaskStatus.Pending).length },
+    { name: 'Running', count: tasks.filter(t => t.status === TaskStatus.Running).length },
+    { name: 'Completed', count: tasks.filter(t => t.status === TaskStatus.Completed).length },
+    { name: 'Failed', count: tasks.filter(t => t.status === TaskStatus.Failed).length },
   ];
 
   return (
@@ -78,27 +79,33 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, resources, t }) => {
 
       {/* Main Charts Area */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Resource Load Chart */}
+        {/* Resource Load Chart - Only show if we have resources */}
         <div className="lg:col-span-2 theme-bg-panel p-6 rounded-lg border theme-border shadow-xl">
           <h3 className="text-lg font-semibold theme-text-main mb-4 flex items-center">
             <Activity className="mr-2 h-5 w-5 text-blue-400" />
             {t.dashboard.resourceLoad}
           </h3>
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={resourceData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="name" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border)', color: 'var(--text-main)' }} 
-                  itemStyle={{ color: 'var(--text-main)' }}
-                />
-                <Legend />
-                <Bar dataKey="load" name={t.dashboard.loadLabel} fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="temp" name={t.dashboard.tempLabel} fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {resources.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={resourceData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="name" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border)', color: 'var(--text-main)' }} 
+                    itemStyle={{ color: 'var(--text-main)' }}
+                  />
+                  <Legend />
+                  <Bar dataKey="load" name={t.dashboard.loadLabel} fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="temp" name={t.dashboard.tempLabel} fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-500">
+                No resource data available
+              </div>
+            )}
           </div>
         </div>
 

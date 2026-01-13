@@ -1,14 +1,29 @@
 export type Language = 'en' | 'zh';
 export type Theme = 'default' | 'light' | 'ocean';
 
+// Enums for easier mapping in UI
+export enum TaskStatus {
+  Pending = 0,
+  Running = 1,
+  Completed = 2,
+  Failed = 3
+}
+
+export enum AntennaStatus {
+  Idle = 0,
+  Active = 1,
+  Fault = 2
+}
+
 export interface Task {
-  id: string;
+  id: number; // Changed from string to number
   name: string;
-  priority: 'High' | 'Medium' | 'Low';
-  status: 'Pending' | 'Running' | 'Completed' | 'Failed';
-  resourceType: 'CPU' | 'GPU' | 'FPGA';
+  priority: number; // Changed from string to number (Higher = greater priority)
+  status: number; // 0:Pending, 1:Running, 2:Completed, 3:Failed
+  neededAntennas: number; // New field
   duration: number; // in seconds
-  submittedAt: string;
+  createTime: string; // New field, replaces submittedAt
+  resourceType?: 'CPU' | 'GPU' | 'FPGA'; // Optional, kept for UI compatibility if needed
 }
 
 export interface ResourceNode {
@@ -21,8 +36,11 @@ export interface ResourceNode {
 
 export interface AntennaUnit {
   id: number;
-  x: number;
-  y: number;
-  status: 'Active' | 'Idle' | 'Fault';
-  signalStrength: number;
+  xPos: number; // Changed from x
+  yPos: number; // Changed from y
+  status: number; // 0:Idle, 1:Active, 2:Fault
+  amplitude: number; // Changed from signalStrength
+  phase: number; // New field
+  code: string; // New field
+  taskId: number | null; // New field
 }

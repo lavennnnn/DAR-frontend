@@ -4,67 +4,107 @@ import Dashboard from './components/Dashboard';
 import ArrayVisualizer from './components/ArrayVisualizer';
 import AIImageEditor from './components/AIImageEditor';
 import Settings from './components/Settings';
-import { Task, ResourceNode, AntennaUnit, Language, Theme } from './types';
+import TaskFormModal from './components/TaskFormModal';
+import { Task, ResourceNode, AntennaUnit, Language, Theme, TaskStatus, AntennaStatus } from './types';
 import { translations } from './utils/translations';
-import { Play, Pause, Plus, Search, Filter } from 'lucide-react';
+import { api } from './services/api';
+import { useWebSocket } from './hooks/useWebSocket';
+import { Play, Pause, Plus, Search, Filter, Check } from 'lucide-react';
 
-// Mock Data Generators
-const generateResources = (): ResourceNode[] => {
-  const types: ('CPU' | 'GPU' | 'FPGA')[] = ['CPU', 'GPU', 'FPGA'];
-  return Array.from({ length: 12 }, (_, i) => ({
-    id: `node-${i + 1}`,
-    type: types[i % 3],
-    load: Math.floor(Math.random() * 60) + 20,
-    temperature: Math.floor(Math.random() * 30) + 40,
-    status: Math.random() > 0.9 ? 'Maintenance' : 'Online'
-  }));
+// Helper to format date strings
+const formatTime = (isoString: string) => {
+  try {
+    return new Date(isoString).toLocaleTimeString();
+  } catch (e) {
+    return isoString;
+  }
 };
-
-const generateAntennas = (): AntennaUnit[] => {
-  return Array.from({ length: 256 }, (_, i) => ({
-    id: i,
-    x: i % 16,
-    y: Math.floor(i / 16),
-    status: Math.random() > 0.95 ? 'Fault' : (Math.random() > 0.8 ? 'Idle' : 'Active'),
-    signalStrength: Math.floor(Math.random() * 100)
-  }));
-};
-
-const generateTasks = (): Task[] => [
-  { id: 'T-101', name: 'Beamforming Calc - Sector A', priority: 'High', status: 'Running', resourceType: 'FPGA', duration: 120, submittedAt: '10:00:00' },
-  { id: 'T-102', name: 'Signal Analysis - Trace 4', priority: 'Medium', status: 'Pending', resourceType: 'GPU', duration: 300, submittedAt: '10:05:00' },
-  { id: 'T-103', name: 'System Diagnostics', priority: 'Low', status: 'Completed', resourceType: 'CPU', duration: 45, submittedAt: '09:55:00' },
-  { id: 'T-104', name: 'Waveform Synthesis', priority: 'High', status: 'Running', resourceType: 'FPGA', duration: 600, submittedAt: '10:02:00' },
-  { id: 'T-105', name: 'Interference Nulling', priority: 'High', status: 'Pending', resourceType: 'GPU', duration: 180, submittedAt: '10:10:00' },
-];
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [language, setLanguage] = useState<Language>('en');
   const [theme, setTheme] = useState<Theme>('default');
-  const [resources, setResources] = useState<ResourceNode[]>(generateResources());
-  const [antennas, setAntennas] = useState<AntennaUnit[]>(generateAntennas());
-  const [tasks, setTasks] = useState<Task[]>(generateTasks());
+  
+  // State initialized as empty, waiting for API data
+  const [resources, setResources] = useState<ResourceNode[]>([]);
+  const [antennas, setAntennas] = useState<AntennaUnit[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  // Modal and Toast State
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [showTaskSuccessToast, setShowTaskSuccessToast] = useState(false);
 
   const t = translations[language];
 
-  // Simulate live data updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setResources(prev => prev.map(r => ({
-        ...r,
-        load: Math.min(100, Math.max(0, r.load + (Math.random() * 10 - 5))),
-        temperature: Math.min(90, Math.max(30, r.temperature + (Math.random() * 4 - 2)))
-      })));
-      
-      setAntennas(prev => prev.map(a => ({
-        ...a,
-        signalStrength: Math.min(100, Math.max(0, a.signalStrength + (Math.random() * 20 - 10)))
-      })));
-    }, 2000);
+  // WebSocket Connection
+  const { lastMessage, connectionStatus } = useWebSocket('ws://localhost:8080/ws/monitor');
 
-    return () => clearInterval(interval);
+  // Fetch initial data from backend
+  const loadData = async () => {
+    // Fetch Antennas (User Request)
+    const antennaData = await api.fetchAntennas();
+    setAntennas(antennaData);
+
+    // Fetch Tasks (To support Task Tab)
+    const taskData = await api.fetchTasks();
+    setTasks(taskData);
+  };
+
+  useEffect(() => {
+    loadData();
+    // Removed setInterval polling
   }, []);
+
+  // Handle Real-time WebSocket Messages
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    console.log('Received WebSocket Message:', lastMessage);
+
+    if (lastMessage.type === 'TASK_START') {
+      const { taskId, antennas: antennaIds } = lastMessage;
+      
+      // Update Task Status to Running
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, status: TaskStatus.Running } : t
+      ));
+
+      // Update Antenna Status to Active and set taskId
+      if (Array.isArray(antennaIds)) {
+        setAntennas(prev => prev.map(a => 
+          antennaIds.includes(a.id) 
+            ? { ...a, status: AntennaStatus.Active, taskId: taskId } 
+            : a
+        ));
+      }
+    } else if (lastMessage.type === 'TASK_END') {
+       const { taskId } = lastMessage;
+
+       // Update Task Status to Completed
+       setTasks(prev => prev.map(t => 
+         t.id === taskId ? { ...t, status: TaskStatus.Completed } : t
+       ));
+
+       // Reset Antennas associated with this task to Idle
+       setAntennas(prev => prev.map(a => 
+         a.taskId === taskId 
+           ? { ...a, status: AntennaStatus.Idle, taskId: null } 
+           : a
+       ));
+    }
+  }, [lastMessage]);
+
+  const handleTaskSubmitSuccess = () => {
+    setIsTaskModalOpen(false);
+    setShowTaskSuccessToast(true);
+    // Reload tasks to show the new one immediately
+    loadData(); 
+    
+    // Hide toast after 3 seconds
+    setTimeout(() => {
+      setShowTaskSuccessToast(false);
+    }, 3000);
+  };
 
   // Dynamic Theme Styles
   const getThemeStyles = () => {
@@ -105,7 +145,16 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard tasks={tasks} resources={resources} t={t} />;
+        return (
+          <div className="flex flex-col h-full">
+            {connectionStatus !== 'Open' && (
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded text-red-300 text-sm">
+                Real-time connection status: {connectionStatus} (ws://localhost:8080/ws/monitor)
+              </div>
+            )}
+            <Dashboard tasks={tasks} resources={resources} t={t} />
+          </div>
+        );
       case 'resources':
         return (
           <div className="space-y-6 h-full flex flex-col">
@@ -130,7 +179,10 @@ function App() {
           <div className="space-y-6">
              <div className="flex justify-between items-center mb-6">
                <h2 className="text-2xl font-bold theme-text-main">{t.tasks.title}</h2>
-               <button className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md flex items-center font-medium transition-colors">
+               <button 
+                 onClick={() => setIsTaskModalOpen(true)}
+                 className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md flex items-center font-medium transition-colors"
+               >
                  <Plus size={18} className="mr-2" />
                  {t.tasks.newJob}
                </button>
@@ -172,23 +224,23 @@ function App() {
                        <td className="p-4 font-medium theme-text-main">{task.name}</td>
                        <td className="p-4">
                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                           task.priority === 'High' ? 'bg-red-500/20 text-red-400' : 
-                           task.priority === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' : 
+                           task.priority >= 8 ? 'bg-red-500/20 text-red-400' : 
+                           task.priority >= 4 ? 'bg-yellow-500/20 text-yellow-400' : 
                            'bg-blue-500/20 text-blue-400'
                          }`}>
-                           {task.priority}
+                           Lv.{task.priority}
                          </span>
                        </td>
-                       <td className="p-4 theme-text-muted">{task.resourceType}</td>
+                       <td className="p-4 theme-text-muted">{task.resourceType || 'Antenna Array'}</td>
                        <td className="p-4">
                          <span className={`flex items-center ${
-                            task.status === 'Running' ? 'text-blue-400' :
-                            task.status === 'Completed' ? 'text-emerald-400' :
-                            task.status === 'Pending' ? 'text-amber-400' :
+                            task.status === TaskStatus.Running ? 'text-blue-400' :
+                            task.status === TaskStatus.Completed ? 'text-emerald-400' :
+                            task.status === TaskStatus.Pending ? 'text-amber-400' :
                             'text-slate-400'
                          }`}>
-                           {task.status === 'Running' && <span className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-2"></span>}
-                           {task.status}
+                           {task.status === TaskStatus.Running && <span className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-2"></span>}
+                           {TaskStatus[task.status]}
                          </span>
                        </td>
                        <td className="p-4">
@@ -231,6 +283,22 @@ function App() {
       <Layout activeTab={activeTab} setActiveTab={setActiveTab} t={t}>
         {renderContent()}
       </Layout>
+
+      {/* Task Form Modal */}
+      <TaskFormModal 
+        isOpen={isTaskModalOpen} 
+        onClose={() => setIsTaskModalOpen(false)} 
+        onSuccess={handleTaskSubmitSuccess}
+        t={t}
+      />
+
+      {/* Success Toast */}
+      {showTaskSuccessToast && (
+        <div className="fixed top-6 right-6 bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 px-4 py-3 rounded-lg shadow-lg flex items-center animate-bounce-in z-50">
+          <Check size={18} className="mr-2" />
+          <span className="font-medium">Job submitted successfully!</span>
+        </div>
+      )}
     </>
   );
 }
