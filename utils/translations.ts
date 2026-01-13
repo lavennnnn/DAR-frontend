@@ -1,3 +1,4 @@
+
 export const translations = {
   en: {
     appTitle: 'ArraySys',
@@ -7,6 +8,24 @@ export const translations = {
       tasks: 'Task Schedule',
       aiLab: 'AI Visual Lab',
       settings: 'Settings'
+    },
+    login: {
+      welcome: 'Welcome Back',
+      subtitle: 'Sign in to access the system',
+      createAccount: 'Create Account',
+      joinSubtitle: 'Join the Digital Array Scheduler',
+      username: 'Username',
+      password: 'Password',
+      nickname: 'Nickname',
+      enterUser: 'Enter username',
+      enterNick: 'Display name',
+      signIn: 'Sign In',
+      signUp: 'Sign Up',
+      haveAccount: 'Already have an account? Sign in',
+      noAccount: "Don't have an account? Create one",
+      regFailed: 'Registration failed. Username may be taken.',
+      loginFailed: 'Invalid username or password.',
+      errorGeneric: 'An unexpected error occurred.'
     },
     dashboard: {
       systemStatus: 'System Status',
@@ -96,6 +115,24 @@ export const translations = {
       tasks: '任务调度',
       aiLab: 'AI 视觉实验室',
       settings: '设置'
+    },
+    login: {
+      welcome: '欢迎回来',
+      subtitle: '登录以访问系统',
+      createAccount: '创建账户',
+      joinSubtitle: '注册数字阵列调度系统',
+      username: '用户名',
+      password: '密码',
+      nickname: '昵称',
+      enterUser: '输入用户名',
+      enterNick: '显示名称',
+      signIn: '登录',
+      signUp: '注册',
+      haveAccount: '已有账号？去登录',
+      noAccount: '没有账号？创建一个',
+      regFailed: '注册失败，用户名可能已被占用。',
+      loginFailed: '用户名或密码错误。',
+      errorGeneric: '发生意外错误。'
     },
     dashboard: {
       systemStatus: '系统状态',

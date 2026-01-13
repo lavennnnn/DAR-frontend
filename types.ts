@@ -44,3 +44,21 @@ export interface AntennaUnit {
   code: string; // New field
   taskId: number | null; // New field
 }
+
+export interface User {
+  userId: number;
+  username: string;
+  nickname: string;
+  token: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  nickname: string;
+}

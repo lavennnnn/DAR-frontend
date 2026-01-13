@@ -1,17 +1,73 @@
-import { Task, AntennaUnit } from '../types';
+import { Task, AntennaUnit, User, LoginRequest, RegisterRequest } from '../types';
 
-// Assuming proxy is configured in vite.config.ts or similar to forward /api to localhost:8080
-// If not, change this to 'http://localhost:8080/api'
+// Assuming proxy is configured in vite.config.ts to forward /api to localhost:8080
 const BASE_URL = '/api';
 
+// Helper to construct headers with Auth token if available
+const getHeaders = () => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  const token = localStorage.getItem('token');
+  if (token) {
+    // Inject token into Authorization header for backend JwtInterceptor
+    (headers as any)['Authorization'] = token;
+  }
+  return headers;
+};
+
 export const api = {
+  /**
+   * User Login
+   * POST /api/auth/login
+   */
+  login: async (data: LoginRequest): Promise<User | null> => {
+    try {
+      const response = await fetch(`${BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error('Login failed');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Login API Error:', error);
+      return null;
+    }
+  },
+
+  /**
+   * User Registration
+   * POST /api/auth/register
+   */
+  register: async (data: RegisterRequest): Promise<User | null> => {
+    try {
+      const response = await fetch(`${BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error('Registration failed');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Register API Error:', error);
+      return null;
+    }
+  },
+
   /**
    * Fetch all antenna resources
    * GET /api/resource/antenna/list
    */
   fetchAntennas: async (): Promise<AntennaUnit[]> => {
     try {
-      const response = await fetch(`${BASE_URL}/resource/antenna/list`);
+      const response = await fetch(`${BASE_URL}/resource/antenna/list`, {
+        headers: getHeaders()
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch antennas');
       }
@@ -28,7 +84,9 @@ export const api = {
    */
   fetchTasks: async (): Promise<Task[]> => {
     try {
-      const response = await fetch(`${BASE_URL}/task/list`);
+      const response = await fetch(`${BASE_URL}/task/list`, {
+        headers: getHeaders()
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch tasks');
       }
@@ -47,9 +105,7 @@ export const api = {
     try {
       const response = await fetch(`${BASE_URL}/task/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
         body: JSON.stringify(task),
       });
       return response.ok;

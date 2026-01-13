@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Globe, Bell, Palette, Save, Check, Loader2 } from 'lucide-react';
+import { Bell, Save, Check, Loader2 } from 'lucide-react';
 import { Language, Theme } from '../types';
 
 interface SettingsProps {
@@ -47,85 +47,7 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage, theme, setTh
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Language Settings */}
-        <div className="theme-bg-panel p-6 rounded-lg border theme-border shadow-xl">
-          <div className="flex items-center mb-4">
-            <Globe className="text-blue-400 mr-3" size={24} />
-            <h3 className="text-lg font-semibold theme-text-main">{t.settings.language}</h3>
-          </div>
-          <p className="theme-text-muted text-sm mb-6">
-            {t.settings.languageDesc}
-          </p>
-          
-          <div className="flex space-x-4">
-            <button
-              onClick={() => setLanguage('en')}
-              className={`flex-1 py-3 px-4 rounded-md border text-sm font-medium transition-all ${
-                language === 'en'
-                  ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20'
-                  : 'theme-bg-main theme-border theme-text-muted hover:opacity-80'
-              }`}
-            >
-              English
-            </button>
-            <button
-              onClick={() => setLanguage('zh')}
-              className={`flex-1 py-3 px-4 rounded-md border text-sm font-medium transition-all ${
-                language === 'zh'
-                  ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20'
-                  : 'theme-bg-main theme-border theme-text-muted hover:opacity-80'
-              }`}
-            >
-              中文 (Chinese)
-            </button>
-          </div>
-        </div>
-
-        {/* Theme Settings */}
-        <div className="theme-bg-panel p-6 rounded-lg border theme-border shadow-xl">
-          <div className="flex items-center mb-4">
-            <Palette className="text-purple-400 mr-3" size={24} />
-            <h3 className="text-lg font-semibold theme-text-main">{t.settings.theme}</h3>
-          </div>
-          <p className="theme-text-muted text-sm mb-6">
-            {t.settings.themeDesc}
-          </p>
-          <div className="flex space-x-4">
-            {/* Dark/Default Theme */}
-            <div 
-              onClick={() => setTheme('default')}
-              className={`cursor-pointer group relative flex flex-col items-center p-2 rounded-lg transition-all ${theme === 'default' ? 'bg-slate-700/50 ring-2 ring-blue-500' : 'hover:bg-slate-700/30'}`}
-            >
-              <div className="w-10 h-10 rounded-full bg-slate-900 border-2 border-slate-600 mb-2 shadow-inner"></div>
-              <span className={`text-xs ${theme === 'default' ? 'text-blue-400 font-medium' : 'theme-text-muted'}`}>
-                {t.settings.themes.default}
-              </span>
-            </div>
-
-            {/* Light Theme */}
-            <div 
-              onClick={() => setTheme('light')}
-              className={`cursor-pointer group relative flex flex-col items-center p-2 rounded-lg transition-all ${theme === 'light' ? 'bg-slate-700/50 ring-2 ring-blue-500' : 'hover:bg-slate-700/30'}`}
-            >
-              <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-slate-400 mb-2 shadow-inner"></div>
-              <span className={`text-xs ${theme === 'light' ? 'text-blue-400 font-medium' : 'theme-text-muted'}`}>
-                {t.settings.themes.light}
-              </span>
-            </div>
-
-            {/* Ocean Theme */}
-            <div 
-              onClick={() => setTheme('ocean')}
-              className={`cursor-pointer group relative flex flex-col items-center p-2 rounded-lg transition-all ${theme === 'ocean' ? 'bg-slate-700/50 ring-2 ring-blue-500' : 'hover:bg-slate-700/30'}`}
-            >
-              <div className="w-10 h-10 rounded-full bg-blue-900 border-2 border-blue-400 mb-2 shadow-inner"></div>
-              <span className={`text-xs ${theme === 'ocean' ? 'text-blue-400 font-medium' : 'theme-text-muted'}`}>
-                 {t.settings.themes.ocean}
-              </span>
-            </div>
-          </div>
-        </div>
-
+        
         {/* Notification Settings */}
         <div className="theme-bg-panel p-6 rounded-lg border theme-border shadow-xl md:col-span-2">
           <div className="flex items-center mb-4">

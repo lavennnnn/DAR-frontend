@@ -5,11 +5,14 @@ import ArrayVisualizer from './components/ArrayVisualizer';
 import AIImageEditor from './components/AIImageEditor';
 import Settings from './components/Settings';
 import TaskFormModal from './components/TaskFormModal';
+import LoginPage from './components/LoginPage';
 import { Task, ResourceNode, AntennaUnit, Language, Theme, TaskStatus, AntennaStatus } from './types';
 import { translations } from './utils/translations';
 import { api } from './services/api';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Play, Pause, Plus, Search, Filter, Check } from 'lucide-react';
+import { useAuth } from './context/AuthContext';
+import { Plus, Search, Filter, Check } from 'lucide-react';
+import { Play, Pause } from 'lucide-react';
 
 // Helper to format date strings
 const formatTime = (isoString: string) => {
@@ -21,6 +24,7 @@ const formatTime = (isoString: string) => {
 };
 
 function App() {
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [language, setLanguage] = useState<Language>('en');
   const [theme, setTheme] = useState<Theme>('default');
@@ -37,7 +41,8 @@ function App() {
   const t = translations[language];
 
   // WebSocket Connection
-  const { lastMessage, connectionStatus } = useWebSocket('ws://localhost:8080/ws/monitor');
+  // Only connect if authenticated to avoid errors or unauthorized socket attempts
+  const { lastMessage, connectionStatus } = useWebSocket(isAuthenticated ? 'ws://localhost:8080/ws/monitor' : '');
 
   // Fetch initial data from backend
   const loadData = async () => {
@@ -51,9 +56,10 @@ function App() {
   };
 
   useEffect(() => {
-    loadData();
-    // Removed setInterval polling
-  }, []);
+    if (isAuthenticated) {
+      loadData();
+    }
+  }, [isAuthenticated]);
 
   // Handle Real-time WebSocket Messages
   useEffect(() => {
@@ -149,7 +155,7 @@ function App() {
           <div className="flex flex-col h-full">
             {connectionStatus !== 'Open' && (
               <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded text-red-300 text-sm">
-                Real-time connection status: {connectionStatus} (ws://localhost:8080/ws/monitor)
+                Real-time connection status: {connectionStatus}
               </div>
             )}
             <Dashboard tasks={tasks} resources={resources} t={t} />
@@ -280,24 +286,45 @@ function App() {
           body { background-color: var(--bg-main); color: var(--text-main); }
         `}
       </style>
-      <Layout activeTab={activeTab} setActiveTab={setActiveTab} t={t}>
-        {renderContent()}
-      </Layout>
+      
+      {!isAuthenticated ? (
+        <LoginPage 
+           language={language} 
+           setLanguage={setLanguage}
+           theme={theme}
+           setTheme={setTheme}
+           t={t}
+        />
+      ) : (
+        <>
+          <Layout 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab} 
+            t={t}
+            language={language}
+            setLanguage={setLanguage}
+            theme={theme}
+            setTheme={setTheme}
+          >
+            {renderContent()}
+          </Layout>
 
-      {/* Task Form Modal */}
-      <TaskFormModal 
-        isOpen={isTaskModalOpen} 
-        onClose={() => setIsTaskModalOpen(false)} 
-        onSuccess={handleTaskSubmitSuccess}
-        t={t}
-      />
+          {/* Task Form Modal */}
+          <TaskFormModal 
+            isOpen={isTaskModalOpen} 
+            onClose={() => setIsTaskModalOpen(false)} 
+            onSuccess={handleTaskSubmitSuccess}
+            t={t}
+          />
 
-      {/* Success Toast */}
-      {showTaskSuccessToast && (
-        <div className="fixed top-6 right-6 bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 px-4 py-3 rounded-lg shadow-lg flex items-center animate-bounce-in z-50">
-          <Check size={18} className="mr-2" />
-          <span className="font-medium">Job submitted successfully!</span>
-        </div>
+          {/* Success Toast */}
+          {showTaskSuccessToast && (
+            <div className="fixed top-6 right-6 bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 px-4 py-3 rounded-lg shadow-lg flex items-center animate-bounce-in z-50">
+              <Check size={18} className="mr-2" />
+              <span className="font-medium">Job submitted successfully!</span>
+            </div>
+          )}
+        </>
       )}
     </>
   );

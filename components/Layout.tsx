@@ -6,17 +6,39 @@ import {
   Settings, 
   Wand2,
   Menu,
-  Bell
+  Bell,
+  LogOut,
+  Globe,
+  Sun,
+  Moon,
+  Droplets
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Language, Theme } from '../types';
 
 interface LayoutProps {
   children: ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   t: any; // Translation object
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, t }) => {
+const Layout: React.FC<LayoutProps> = ({ 
+  children, 
+  activeTab, 
+  setActiveTab, 
+  t,
+  language,
+  setLanguage,
+  theme,
+  setTheme
+}) => {
+  const { user, logout } = useAuth();
+  
   const navItems = [
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
     { id: 'resources', label: t.nav.resources, icon: Radio },
@@ -24,6 +46,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, t })
     { id: 'ai-lab', label: t.nav.aiLab, icon: Wand2 },
     { id: 'settings', label: t.nav.settings, icon: Settings },
   ];
+
+  const toggleLanguage = () => setLanguage(language === 'en' ? 'zh' : 'en');
+  
+  const toggleTheme = () => {
+    if (theme === 'default') setTheme('light');
+    else if (theme === 'light') setTheme('ocean');
+    else setTheme('default');
+  };
+
+  const getThemeIcon = () => {
+    switch(theme) {
+        case 'light': return <Sun size={20} />;
+        case 'ocean': return <Droplets size={20} />;
+        default: return <Moon size={20} />;
+    }
+  };
 
   return (
     <div className="flex h-screen theme-bg-main overflow-hidden font-sans">
@@ -62,14 +100,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, t })
         </nav>
 
         <div className="p-4 border-t theme-border">
-          <div className="flex items-center p-2 rounded-lg bg-slate-700/30">
-            <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-white">
-              AD
+          <div className="flex items-center justify-between p-2 rounded-lg bg-slate-700/30">
+            <div className="flex items-center min-w-0">
+              <div className="w-8 h-8 rounded-full bg-slate-600 flex-shrink-0 flex items-center justify-center text-xs font-bold text-white uppercase">
+                {user?.nickname?.substring(0, 2) || user?.username?.substring(0, 2) || 'US'}
+              </div>
+              <div className="ml-3 min-w-0">
+                <p className="text-sm font-medium theme-text-main truncate" title={user?.nickname || user?.username}>
+                  {user?.nickname || user?.username || 'User'}
+                </p>
+                <p className="text-xs theme-text-muted">Operator</p>
+              </div>
             </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium theme-text-main">Admin User</p>
-              <p className="text-xs theme-text-muted">System Operator</p>
-            </div>
+            <button
+              onClick={logout}
+              className="ml-2 p-1.5 text-slate-400 hover:text-white hover:bg-slate-600 rounded-md transition-colors"
+              title="Logout"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
       </aside>
@@ -84,7 +133,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, t })
           <h2 className="text-lg font-semibold theme-text-main ml-2 md:ml-0">
             {navItems.find(i => i.id === activeTab)?.label}
           </h2>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+             <button 
+                onClick={toggleLanguage} 
+                className="p-2 theme-text-muted hover:text-white transition-colors rounded-full hover:bg-slate-700/50" 
+                title={language === 'en' ? 'Switch to Chinese' : '切换到英文'}
+             >
+                <Globe size={20} />
+             </button>
+             
+             <button 
+                onClick={toggleTheme} 
+                className="p-2 theme-text-muted hover:text-white transition-colors rounded-full hover:bg-slate-700/50" 
+                title="Switch Theme"
+             >
+                {getThemeIcon()}
+             </button>
+
+             <div className="h-6 w-px bg-slate-700 mx-2"></div>
+
              <button className="relative p-2 theme-text-muted hover:text-white transition-colors">
                <Bell size={20} />
                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
