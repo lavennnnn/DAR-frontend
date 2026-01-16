@@ -6,35 +6,43 @@ interface AuthContextType {
   login: (userData: User) => void;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Check localStorage on mount
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      const token = localStorage.getItem('token');
-      
-      if (storedUser && token) {
-        const parsedUser: User = JSON.parse(storedUser);
-        // Ensure consistency between stored user object and token
-        if (parsedUser.token === token) {
-           setUser(parsedUser);
-        } else {
-           // Inconsistent state, clean up
-           localStorage.removeItem('user');
-           localStorage.removeItem('token');
+    const initAuth = async () => {
+      try {
+        const storedUser = localStorage.getItem('user');
+        const token = localStorage.getItem('token');
+
+        if (storedUser && token) {
+          const parsedUser: User = JSON.parse(storedUser);
+          // Ensure consistency between stored user object and token
+          if (parsedUser.token === token) {
+            setUser(parsedUser);
+          } else {
+            // Inconsistent state, clean up
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+          }
         }
+      } catch (error) {
+        console.error("Failed to restore authentication state", error);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to restore authentication state", error);
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-    }
+    };
+
+    initAuth();
   }, []);
 
   const login = (userData: User) => {
@@ -50,9 +58,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
-      {children}
-    </AuthContext.Provider>
+      <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isLoading }}>
+        {children}
+      </AuthContext.Provider>
   );
 };
 
