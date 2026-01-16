@@ -60,6 +60,33 @@ export const api = {
   },
 
   /**
+   * Get Nickname
+   * Endpoint: /api/auth/getNickname?name={username}
+   * Method: GET
+   */
+  getNickname: async (username: string): Promise<string> => {
+    try {
+      // Updated to use GET with query parameter 'name'
+      const response = await fetch(`${BASE_URL}/auth/getNickname?name=${encodeURIComponent(username)}`, {
+        method: 'GET',
+        headers: getHeaders(),
+      });
+
+      if (response.ok) {
+        const res = await response.json();
+        // Handle Result<String> wrapper: { code: 200, data: "..." }
+        if (res && res.code === 200) {
+          return res.data || "";
+        }
+      }
+      return "";
+    } catch (error) {
+      console.error('Get Nickname API Error:', error);
+      return "";
+    }
+  },
+
+  /**
    * Fetch all antenna resources
    * GET /api/resource/antenna/list
    */

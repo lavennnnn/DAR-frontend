@@ -42,7 +42,7 @@ function App() {
 
   // WebSocket Connection
   // Only connect if authenticated to avoid errors or unauthorized socket attempts
-  const { lastMessage, connectionStatus } = useWebSocket(isAuthenticated ? 'ws://localhost:8080/ws/monitor' : '');
+  const { lastMessage, connectionStatus } = useWebSocket(isAuthenticated ? 'ws://localhost:8081/ws/monitor' : '');
 
   // Fetch initial data from backend
   const loadData = async () => {

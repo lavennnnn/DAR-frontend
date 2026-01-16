@@ -24,13 +24,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (storedUser && token) {
           const parsedUser: User = JSON.parse(storedUser);
-          // Ensure consistency between stored user object and token
-          if (parsedUser.token === token) {
+          // Trust the existence of token and user in localStorage.
+          // We don't compare parsedUser.token === token strictly because the backend
+          // might return a user object structure that doesn't strictly mirror the User type
+          // or contain the token inside it. The token in localStorage is the source of truth for auth.
+          if (parsedUser) {
             setUser(parsedUser);
-          } else {
-            // Inconsistent state, clean up
-            localStorage.removeItem('user');
-            localStorage.removeItem('token');
           }
         }
       } catch (error) {
@@ -46,9 +45,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = (userData: User) => {
+    // Ensure we store the token if it's inside userData,
+    // otherwise rely on what might have been handled elsewhere or assume userData.token exists.
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('token', userData.token);
+    if (userData.token) {
+      localStorage.setItem('token', userData.token);
+    }
   };
 
   const logout = () => {

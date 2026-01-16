@@ -6,6 +6,12 @@ export const useWebSocket = (url: string) => {
   const ws = useRef<WebSocket | null>(null);
 
   useEffect(() => {
+    // ✅ 新增：如果 URL 为空，直接返回，不创建 WebSocket，防止崩溃
+    if (!url) {
+      setConnectionStatus('Closed');
+      return;
+    }
+
     // Basic connection logic
     const socket = new WebSocket(url);
     ws.current = socket;

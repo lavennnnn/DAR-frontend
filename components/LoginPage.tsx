@@ -36,6 +36,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
           nickname: formData.nickname
         });
         if (user) {
+          // If backend returns a user object but nickname is missing/empty,
+          // manually inject the nickname from the form data.
+          if (!user.nickname && formData.nickname) {
+            user.nickname = formData.nickname;
+          }
           login(user);
         } else {
           setError(t.login.regFailed);
@@ -46,6 +51,18 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
           password: formData.password
         });
         if (user) {
+          // If login is successful but nickname is missing, try to fetch it
+          if (!user.nickname) {
+            try {
+              const fetchedNickname = await api.getNickname(user.username);
+              if (fetchedNickname) {
+                user.nickname = fetchedNickname;
+              }
+            } catch (ignore) {
+              // Silently fail if nickname fetch fails, allow login to proceed
+              console.warn("Could not fetch nickname");
+            }
+          }
           login(user);
         } else {
           setError(t.login.loginFailed);
@@ -59,7 +76,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
   };
 
   const toggleLanguage = () => setLanguage(language === 'en' ? 'zh' : 'en');
-  
+
   const toggleTheme = () => {
     if (theme === 'default') setTheme('light');
     else if (theme === 'light') setTheme('ocean');
@@ -68,136 +85,136 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
 
   const getThemeIcon = () => {
     switch(theme) {
-        case 'light': return <Sun size={20} />;
-        case 'ocean': return <Droplets size={20} />;
-        default: return <Moon size={20} />;
+      case 'light': return <Sun size={20} />;
+      case 'ocean': return <Droplets size={20} />;
+      default: return <Moon size={20} />;
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center theme-bg-main p-4 font-sans relative transition-colors duration-300">
-      {/* Top Right Controls */}
-      <div className="absolute top-6 right-6 flex space-x-2 z-20">
-        <button 
-          onClick={toggleLanguage} 
-          className="p-2 theme-text-muted hover:text-white transition-colors theme-bg-panel rounded-full border theme-border shadow-lg"
-          title={language === 'en' ? 'Switch to Chinese' : '切换到英文'}
-        >
-          <Globe size={20} />
-        </button>
-        <button 
-          onClick={toggleTheme} 
-          className="p-2 theme-text-muted hover:text-white transition-colors theme-bg-panel rounded-full border theme-border shadow-lg"
-          title="Switch Theme"
-        >
-          {getThemeIcon()}
-        </button>
-      </div>
-
-      <div className="w-full max-w-md theme-bg-panel rounded-xl shadow-2xl overflow-hidden border theme-border transition-colors duration-300">
-        {/* Header */}
-        <div className="p-8 text-center border-b theme-border bg-slate-700/10">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/20">
-            <User className="text-white w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-bold theme-text-main mb-1">
-            {isRegistering ? t.login.createAccount : t.login.welcome}
-          </h2>
-          <p className="theme-text-muted text-sm">
-            {isRegistering ? t.login.joinSubtitle : t.login.subtitle}
-          </p>
+      <div className="min-h-screen flex items-center justify-center theme-bg-main p-4 font-sans relative transition-colors duration-300">
+        {/* Top Right Controls */}
+        <div className="absolute top-6 right-6 flex space-x-2 z-20">
+          <button
+              onClick={toggleLanguage}
+              className="p-2 theme-text-muted hover:text-white transition-colors theme-bg-panel rounded-full border theme-border shadow-lg"
+              title={language === 'en' ? 'Switch to Chinese' : '切换到英文'}
+          >
+            <Globe size={20} />
+          </button>
+          <button
+              onClick={toggleTheme}
+              className="p-2 theme-text-muted hover:text-white transition-colors theme-bg-panel rounded-full border theme-border shadow-lg"
+              title="Switch Theme"
+          >
+            {getThemeIcon()}
+          </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center">
-              {error}
+        <div className="w-full max-w-md theme-bg-panel rounded-xl shadow-2xl overflow-hidden border theme-border transition-colors duration-300">
+          {/* Header */}
+          <div className="p-8 text-center border-b theme-border bg-slate-700/10">
+            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/20">
+              <User className="text-white w-8 h-8" />
             </div>
-          )}
+            <h2 className="text-2xl font-bold theme-text-main mb-1">
+              {isRegistering ? t.login.createAccount : t.login.welcome}
+            </h2>
+            <p className="theme-text-muted text-sm">
+              {isRegistering ? t.login.joinSubtitle : t.login.subtitle}
+            </p>
+          </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium theme-text-muted mb-1.5">{t.login.username}</label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 theme-text-muted w-5 h-5" />
-                <input
-                  type="text"
-                  required
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder={t.login.enterUser}
-                />
-              </div>
-            </div>
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center">
+                  {error}
+                </div>
+            )}
 
-            {isRegistering && (
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium theme-text-muted mb-1.5">{t.login.nickname}</label>
+                <label className="block text-sm font-medium theme-text-muted mb-1.5">{t.login.username}</label>
                 <div className="relative">
-                  <UserPlus className="absolute left-3 top-3 theme-text-muted w-5 h-5" />
+                  <User className="absolute left-3 top-3 theme-text-muted w-5 h-5" />
                   <input
-                    type="text"
-                    required
-                    value={formData.nickname}
-                    onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
-                    className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    placeholder={t.login.enterNick}
+                      type="text"
+                      required
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      placeholder={t.login.enterUser}
                   />
                 </div>
               </div>
-            )}
 
-            <div>
-              <label className="block text-sm font-medium theme-text-muted mb-1.5">{t.login.password}</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 theme-text-muted w-5 h-5" />
-                <input
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="••••••••"
-                />
+              {isRegistering && (
+                  <div>
+                    <label className="block text-sm font-medium theme-text-muted mb-1.5">{t.login.nickname}</label>
+                    <div className="relative">
+                      <UserPlus className="absolute left-3 top-3 theme-text-muted w-5 h-5" />
+                      <input
+                          type="text"
+                          required
+                          value={formData.nickname}
+                          onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
+                          className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                          placeholder={t.login.enterNick}
+                      />
+                    </div>
+                  </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium theme-text-muted mb-1.5">{t.login.password}</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 theme-text-muted w-5 h-5" />
+                  <input
+                      type="password"
+                      required
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      placeholder="••••••••"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3 rounded-lg shadow-lg shadow-blue-900/20 flex items-center justify-center transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                {isRegistering ? t.login.signUp : t.login.signIn}
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </>
-            )}
-          </button>
-
-          <div className="text-center mt-6">
             <button
-              type="button"
-              onClick={() => {
-                setIsRegistering(!isRegistering);
-                setError(null);
-                setFormData({ username: '', password: '', nickname: '' });
-              }}
-              className="theme-text-muted hover:text-white text-sm font-medium transition-colors"
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3 rounded-lg shadow-lg shadow-blue-900/20 flex items-center justify-center transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isRegistering
-                ? t.login.haveAccount
-                : t.login.noAccount}
+              {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                  <>
+                    {isRegistering ? t.login.signUp : t.login.signIn}
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </>
+              )}
             </button>
-          </div>
-        </form>
+
+            <div className="text-center mt-6">
+              <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegistering(!isRegistering);
+                    setError(null);
+                    setFormData({ username: '', password: '', nickname: '' });
+                  }}
+                  className="theme-text-muted hover:text-white text-sm font-medium transition-colors"
+              >
+                {isRegistering
+                    ? t.login.haveAccount
+                    : t.login.noAccount}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
   );
 };
 
