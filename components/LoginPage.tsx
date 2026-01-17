@@ -37,7 +37,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
         });
         if (user) {
           // If backend returns a user object but nickname is missing/empty,
-          // manually inject the nickname from the form data.
+          // manually inject the nickname from the form data to ensure UI displays it correctly.
           if (!user.nickname && formData.nickname) {
             user.nickname = formData.nickname;
           }
@@ -51,17 +51,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
           password: formData.password
         });
         if (user) {
-          // If login is successful but nickname is missing, try to fetch it
-          if (!user.nickname) {
-            try {
-              const fetchedNickname = await api.getNickname(user.username);
-              if (fetchedNickname) {
-                user.nickname = fetchedNickname;
-              }
-            } catch (ignore) {
-              // Silently fail if nickname fetch fails, allow login to proceed
-              console.warn("Could not fetch nickname");
-            }
+          if (!user.username) {
+            user.username = formData.username;
           }
           login(user);
         } else {
