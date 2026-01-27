@@ -5,9 +5,10 @@ import { AntennaUnit, AntennaStatus } from '../types';
 interface ArrayVisualizerProps {
   data: AntennaUnit[];
   labels: { unitId: string; status: string; signal: string };
+  onUnitClick?: (unit: AntennaUnit) => void;
 }
 
-const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels }) => {
+const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitClick }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -36,6 +37,7 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels }) => {
     const margin = { top: 20, right: 20, bottom: 20, left: 20 };
     const innerWidth = dimensions.width - margin.left - margin.right;
     const innerHeight = dimensions.height - margin.top - margin.bottom;
+
 
     // Determine grid size based on data or default to 16x16
     const cols = Math.ceil(Math.sqrt(data.length || 256)); 
@@ -80,6 +82,13 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels }) => {
       })
       .attr("stroke", "#1e293b")
       .attr("stroke-width", 1)
+        .style("cursor", "pointer")
+        .on("click", (event, d) => {
+          event.stopPropagation(); // 防止冒泡
+          if (onUnitClick) {
+            onUnitClick(d); // 将当前点击的数据传出去
+          }
+        })
       .on("mouseover", (event, d) => {
         const statusText = 
           d.status === AntennaStatus.Active ? 'Active' : 

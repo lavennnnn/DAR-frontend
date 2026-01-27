@@ -11,8 +11,8 @@ import { translations } from './utils/translations';
 import { api } from './services/api';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAuth } from './context/AuthContext';
-import { Plus, Search, Filter, Check, Loader2 } from 'lucide-react';
-import { Play, Pause } from 'lucide-react';
+import { Plus, Search, Filter, Check, Loader2, Square, X } from 'lucide-react';
+
 
 // Helper to format date strings
 const formatTime = (isoString: string) => {
@@ -23,7 +23,9 @@ const formatTime = (isoString: string) => {
   }
 };
 
+
 function App() {
+  const [selectedAntenna, setSelectedAntenna] = useState<AntennaUnit | null>(null);
   const { isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [language, setLanguage] = useState<Language>('en');
@@ -100,6 +102,19 @@ function App() {
     }
   }, [lastMessage]);
 
+  // ✅ 新增：取消任务的处理函数
+  const handleCancelTask = async (taskId: number) => {
+    if (window.confirm('确定要取消/停止该任务吗？')) {
+      const success = await api.cancelTask(taskId);
+      if (success) {
+        // 如果后端返回成功，重新加载数据刷新列表
+        loadData();
+      } else {
+        alert('取消任务失败，请检查网络或任务状态');
+      }
+    }
+  };
+
   const handleTaskSubmitSuccess = () => {
     setIsTaskModalOpen(false);
     setShowTaskSuccessToast(true);
@@ -163,21 +178,105 @@ function App() {
         );
       case 'resources':
         return (
-            <div className="space-y-6 h-full flex flex-col">
-              <div className="flex justify-between items-center theme-bg-panel p-4 rounded-lg border theme-border">
-                <div>
-                  <h2 className="text-xl font-bold theme-text-main">{t.resources.title}</h2>
-                  <p className="theme-text-muted text-sm">{t.resources.subtitle}</p>
+            <div className="flex h-full gap-4"> {/* ✅ 改为 Flex 布局，且有间距 */}
+
+              {/* 左侧：可视化图表 (占据剩余空间) */}
+              <div className="flex-1 flex flex-col space-y-6 h-full transition-all duration-300">
+                <div className="flex justify-between items-center theme-bg-panel p-4 rounded-lg border theme-border">
+                  {/* ... 原有的 Header 内容保持不变 ... */}
+                  <div>
+                    <h2 className="text-xl font-bold theme-text-main">{t.resources.title}</h2>
+                    <p className="theme-text-muted text-sm">{t.resources.subtitle}</p>
+                  </div>
+                  <div className="flex space-x-2 text-sm theme-text-main">
+                    {/* ... 图例保持不变 ... */}
+                  </div>
                 </div>
-                <div className="flex space-x-2 text-sm theme-text-main">
-                  <div className="flex items-center"><div className="w-3 h-3 bg-red-500 rounded mr-2"></div>{t.resources.fault}</div>
-                  <div className="flex items-center"><div className="w-3 h-3 bg-slate-700 rounded mr-2"></div>{t.resources.idle}</div>
-                  <div className="flex items-center"><div className="w-3 h-3 bg-orange-400 rounded mr-2"></div>{t.resources.active}</div>
+
+                <div className="flex-1 theme-bg-panel rounded-lg border theme-border p-4 shadow-xl overflow-hidden">
+                  {/* ✅ 传递点击回调 */}
+                  <ArrayVisualizer
+                      data={antennas}
+                      labels={t.resources.visualizer}
+                      onUnitClick={setSelectedAntenna}
+                  />
                 </div>
               </div>
-              <div className="flex-1 theme-bg-panel rounded-lg border theme-border p-4 shadow-xl overflow-hidden">
-                <ArrayVisualizer data={antennas} labels={t.resources.visualizer} />
-              </div>
+
+              {/* ✅ 右侧：详情面板 (仅当选中时显示) */}
+              {selectedAntenna && (
+                  <div className="w-80 theme-bg-panel border theme-border p-6 shadow-2xl flex flex-col rounded-lg animate-fade-in-right">
+                    <div className="flex justify-between items-center mb-6 border-b theme-border pb-4">
+                      <h3 className="text-lg font-bold theme-text-main">单元详情</h3>
+                      <button
+                          onClick={() => setSelectedAntenna(null)}
+                          className="text-slate-400 hover:text-white transition-colors"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="p-4 bg-slate-700/30 rounded-lg border theme-border text-center">
+                        <span className="text-xs theme-text-muted uppercase">Unit ID</span>
+                        <div className="text-3xl font-mono text-blue-400 mt-2">#{selectedAntenna.id}</div>
+                      </div>
+
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between items-center p-2 rounded hover:bg-slate-700/20">
+                          <span className="theme-text-muted">状态</span>
+                          <span className={`font-medium ${
+                              selectedAntenna.status === AntennaStatus.Active ? 'text-orange-400' :
+                                  selectedAntenna.status === AntennaStatus.Fault ? 'text-red-400' : 'text-slate-400'
+                          }`}>
+                      {selectedAntenna.status === AntennaStatus.Active ? '工作中' :
+                          selectedAntenna.status === AntennaStatus.Fault ? '故障' : '空闲'}
+                    </span>
+                        </div>
+
+                        <div className="flex justify-between items-center p-2 rounded hover:bg-slate-700/20">
+                          <span className="theme-text-muted">坐标 (X, Y)</span>
+                          <span className="font-mono text-white">
+                      ({selectedAntenna.xPos}, {selectedAntenna.yPos})
+                    </span>
+                        </div>
+
+                        <div className="flex justify-between items-center p-2 rounded hover:bg-slate-700/20">
+                          <span className="theme-text-muted">当前相位</span>
+                          <span className="font-mono text-emerald-400">
+                      {selectedAntenna.phase?.toFixed(2)}°
+                    </span>
+                        </div>
+
+                        <div className="flex justify-between items-center p-2 rounded hover:bg-slate-700/20">
+                          <span className="theme-text-muted">信号幅度</span>
+                          <div className="flex items-center">
+                            <div className="w-16 h-1.5 bg-slate-700 rounded-full mr-2 overflow-hidden">
+                              <div
+                                  className="h-full bg-blue-500"
+                                  style={{width: `${(selectedAntenna.amplitude || 0) * 100}%`}}
+                              ></div>
+                            </div>
+                            <span className="font-mono text-white">{selectedAntenna.amplitude?.toFixed(1)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {selectedAntenna.taskId && (
+                          <div className="mt-4 pt-4 border-t theme-border">
+                            <span className="text-xs theme-text-muted uppercase block mb-2">当前执行任务</span>
+                            <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded text-blue-300 text-sm">
+                              <div className="flex justify-between">
+                                <span>Task ID:</span>
+                                <span className="font-mono">{selectedAntenna.taskId}</span>
+                              </div>
+                              <div className="text-xs opacity-70 mt-1">正在运行波束合成序列...</div>
+                            </div>
+                          </div>
+                      )}
+                    </div>
+                  </div>
+              )}
             </div>
         );
       case 'tasks':
@@ -251,8 +350,22 @@ function App() {
                         </td>
                         <td className="p-4">
                           <div className="flex space-x-2">
-                            <button className="p-1 hover:text-white theme-text-muted"><Play size={16} /></button>
-                            <button className="p-1 hover:text-white theme-text-muted"><Pause size={16} /></button>
+                            {/* ✅ 逻辑：只有 'Running'(1) 或 'Pending'(0) 的任务显示取消按钮 */}
+                            {(task.status === TaskStatus.Running || task.status === TaskStatus.Pending) ? (
+                                <button
+                                    onClick={() => handleCancelTask(task.id)}
+                                    className="p-1 hover:text-red-400 theme-text-muted transition-colors"
+                                    title="终止任务"
+                                >
+                                  <Square size={16} fill="currentColor"/>
+                                </button>
+                            ) : (
+                                /* 其他状态显示禁用图标 */
+                                <button className="p-1 text-slate-600 cursor-not-allowed" disabled>
+                                  <Square size={16}/>
+                                </button>
+                            )}
+
                           </div>
                         </td>
                       </tr>
@@ -263,9 +376,9 @@ function App() {
             </div>
         );
       case 'ai-lab':
-        return <AIImageEditor t={t} />;
+        return <AIImageEditor t={t}/>;
       case 'settings':
-        return <Settings language={language} setLanguage={setLanguage} t={t} theme={theme} setTheme={setTheme} />;
+        return <Settings language={language} setLanguage={setLanguage} t={t} theme={theme} setTheme={setTheme}/>;
       default:
         return <div className="p-10 text-center theme-text-muted">Feature under construction</div>;
     }

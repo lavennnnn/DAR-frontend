@@ -80,7 +80,11 @@ export const api = {
       if (!response.ok) {
         throw new Error('Failed to fetch antennas');
       }
-      return await response.json();
+      const res = await response.json();
+      if (res.code === '0') {
+        return res.data || [];
+      }
+      return [];
     } catch (error) {
       console.error('API Error:', error);
       return [];
@@ -99,7 +103,11 @@ export const api = {
       if (!response.ok) {
         throw new Error('Failed to fetch tasks');
       }
-      return await response.json();
+      const res = await response.json();
+      if (res.code === '0') {
+        return res.data || [];
+      }
+      return [];
     } catch (error) {
       console.error('API Error:', error);
       return [];
@@ -120,6 +128,24 @@ export const api = {
       return response.ok;
     } catch (error) {
       console.error('API Error:', error);
+      return false;
+    }
+  },
+
+  /**
+   * Cancel a task
+   * POST /api/task/cancel?taskId={id}
+   */
+  cancelTask: async (taskId: number): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BASE_URL}/task/cancel?taskId=${taskId}`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      // 成功返回 true，失败返回 false
+      return response.ok;
+    } catch (error) {
+      console.error('Cancel Task API Error:', error);
       return false;
     }
   }

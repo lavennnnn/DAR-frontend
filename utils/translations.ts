@@ -47,7 +47,7 @@ export const translations = {
     },
     resources: {
       title: 'Phased Array Matrix Visualization',
-      subtitle: 'Real-time status of 16x16 Digital Array Elements',
+      subtitle: 'Real-time status of Digital Array Elements',
       fault: 'Fault',
       idle: 'Idle',
       active: 'Active',
@@ -154,7 +154,7 @@ export const translations = {
     },
     resources: {
       title: '相控阵矩阵可视化',
-      subtitle: '16x16 数字阵列单元实时状态',
+      subtitle: '数字阵列单元实时状态',
       fault: '故障',
       idle: '空闲',
       active: '活跃',
