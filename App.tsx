@@ -23,9 +23,9 @@ const formatTime = (isoString: string) => {
   }
 };
 
-const [selectedAntenna, setSelectedAntenna] = useState<AntennaUnit | null>(null);
 
 function App() {
+  const [selectedAntenna, setSelectedAntenna] = useState<AntennaUnit | null>(null);
   const { isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [language, setLanguage] = useState<Language>('en');
