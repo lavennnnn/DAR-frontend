@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { AntennaUnit, AntennaStatus } from '../types';
 
@@ -11,40 +11,45 @@ interface ArrayVisualizerProps {
 const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitClick }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    const handleResize = () => {
-      if (wrapperRef.current) {
-        setDimensions({
-          width: wrapperRef.current.clientWidth,
-          height: wrapperRef.current.clientHeight || 400,
-        });
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (!svgRef.current || dimensions.width === 0) return;
+    if (!svgRef.current) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    const margin = { top: 20, right: 20, bottom: 20, left: 20 };
-    const innerWidth = dimensions.width - margin.left - margin.right;
-    const innerHeight = dimensions.height - margin.top - margin.bottom;
-
+    const hasPos = data.some(d => d.xPos !== undefined && d.yPos !== undefined);
+    const xValues = hasPos ? Array.from(new Set(data.map(d => d.xPos))).sort((a, b) => (a ?? 0) - (b ?? 0)) : [];
+    const yValues = hasPos ? Array.from(new Set(data.map(d => d.yPos))).sort((a, b) => (a ?? 0) - (b ?? 0)) : [];
 
     // Determine grid size based on data or default to 16x16
-    const cols = Math.ceil(Math.sqrt(data.length || 256)); 
-    const cellSize = Math.min(innerWidth / cols, innerHeight / cols) * 0.9;
+    let cols = Math.ceil(Math.sqrt(data.length || 256));
+    let rows = Math.ceil((data.length || 256) / cols);
+    let useIndexGrid = true;
+
+    if (hasPos && xValues.length > 0 && yValues.length > 0) {
+      if (xValues.length * yValues.length >= data.length) {
+        cols = xValues.length;
+        rows = yValues.length;
+        useIndexGrid = false;
+      }
+    }
+
+    const cellSize = 10;
+    const cellGap = 1;
+    const rectSize = cellSize - cellGap;
+    const padding = 1;
+    const gridWidth = cols * cellSize;
+    const gridHeight = rows * cellSize;
+    const viewWidth = gridWidth + padding * 2;
+    const viewHeight = gridHeight + padding * 2;
+
+    svg
+      .attr("viewBox", `0 0 ${viewWidth} ${viewHeight}`)
+      .attr("preserveAspectRatio", "xMidYMid meet");
 
     const g = svg.append("g")
-      .attr("transform", `translate(${margin.left + (innerWidth - cols * cellSize) / 2},${margin.top + (innerHeight - cols * cellSize) / 2})`);
+      .attr("transform", `translate(${padding},${padding})`);
 
     // Color scale based on amplitude (formerly signalStrength)
     const colorScale = d3.scaleSequential()
@@ -53,7 +58,10 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
 
     // Tooltip div
     const tooltip = d3.select(wrapperRef.current)
-      .append("div")
+      .selectAll<HTMLDivElement, null>(".array-tooltip")
+      .data([null])
+      .join("div")
+      .attr("class", "array-tooltip")
       .style("position", "absolute")
       .style("visibility", "hidden")
       .style("background", "rgba(15, 23, 42, 0.9)")
@@ -70,18 +78,30 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
       .enter()
       .append("rect")
       // Map xPos/yPos. If data is missing pos, fallback to index based calc
-      .attr("x", (d, i) => (d.xPos ?? (i % cols)) * cellSize)
-      .attr("y", (d, i) => (d.yPos ?? Math.floor(i / cols)) * cellSize)
-      .attr("width", cellSize - 2)
-      .attr("height", cellSize - 2)
-      .attr("rx", 4)
+      .attr("x", (d, i) => {
+        if (!useIndexGrid && d.xPos !== undefined) {
+          const xIndex = xValues.indexOf(d.xPos);
+          return Math.max(0, xIndex) * cellSize + cellGap / 2;
+        }
+        return (i % cols) * cellSize + cellGap / 2;
+      })
+      .attr("y", (d, i) => {
+        if (!useIndexGrid && d.yPos !== undefined) {
+          const yIndex = yValues.indexOf(d.yPos);
+          return Math.max(0, yIndex) * cellSize + cellGap / 2;
+        }
+        return Math.floor(i / cols) * cellSize + cellGap / 2;
+      })
+      .attr("width", rectSize)
+      .attr("height", rectSize)
+      .attr("rx", 1.6)
       .attr("fill", d => {
         if (d.status === AntennaStatus.Fault) return '#ef4444'; // Red
         if (d.status === AntennaStatus.Idle) return '#334155'; // Slate 700
         return colorScale(d.amplitude || 0);
       })
       .attr("stroke", "#1e293b")
-      .attr("stroke-width", 1)
+      .attr("stroke-width", 0.6)
         .style("cursor", "pointer")
         .on("click", (event, d) => {
           event.stopPropagation(); // 防止冒泡
@@ -116,11 +136,11 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
         d3.select(event.currentTarget).attr("stroke", "#1e293b").attr("stroke-width", 1);
       });
 
-  }, [data, dimensions, labels]);
+  }, [data, labels]);
 
   return (
-    <div ref={wrapperRef} className="w-full h-full relative min-h-[400px]">
-      <svg ref={svgRef} width={dimensions.width} height={dimensions.height} className="block"></svg>
+    <div ref={wrapperRef} className="w-full h-full relative min-h-[400px] overflow-hidden">
+      <svg ref={svgRef} className="block w-full h-full" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
   );
 };

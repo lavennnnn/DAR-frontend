@@ -20,7 +20,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, resources, t }) => {
   
   // Data for charts
   const resourceData = resources.map(r => ({
-    name: `${r.type}-${r.id}`,
+    name: r.id,
     load: r.load,
     temp: r.temperature
   }));
@@ -88,9 +88,17 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, resources, t }) => {
           <div className="h-64 w-full">
             {resources.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={resourceData}>
+                <BarChart data={resourceData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="name" stroke="#94a3b8" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#94a3b8"
+                    interval="preserveStartEnd"
+                    angle={-35}
+                    textAnchor="end"
+                    height={60}
+                    tick={{ fontSize: 10 }}
+                  />
                   <YAxis stroke="#94a3b8" />
                   <Tooltip 
                     contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border)', color: 'var(--text-main)' }} 
@@ -117,10 +125,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, resources, t }) => {
           </h3>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={taskStatusData} layout="vertical">
+              <BarChart data={taskStatusData} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis type="number" stroke="#94a3b8" />
-                <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} />
+                <YAxis dataKey="name" type="category" stroke="#94a3b8" width={100} tick={{ fontSize: 12 }} />
                 <Tooltip 
                    contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border)', color: 'var(--text-main)' }} 
                 />

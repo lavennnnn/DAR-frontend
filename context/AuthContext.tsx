@@ -44,6 +44,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initAuth();
   }, []);
 
+  useEffect(() => {
+    const onLogout = () => {
+      setUser(null);
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    };
+    window.addEventListener('auth:logout', onLogout);
+    return () => window.removeEventListener('auth:logout', onLogout);
+  }, []);
+
   const login = (userData: User) => {
     // Ensure we store the token if it's inside userData,
     // otherwise rely on what might have been handled elsewhere or assume userData.token exists.

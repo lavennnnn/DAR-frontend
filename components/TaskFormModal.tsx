@@ -15,6 +15,8 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
     name: '',
     priority: 50,
     neededAntennas: 16,
+    neededCpuCores: 8,
+    neededGpuMem: 4,
     duration: 60,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,7 +31,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
 
     // Validate inputs
     if (!formData.name.trim()) {
-      setError('Task name is required');
+      setError(t.tasks?.form?.errorNameRequired || 'Task name is required');
       setIsSubmitting(false);
       return;
     }
@@ -38,6 +40,8 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
       name: formData.name,
       priority: Number(formData.priority),
       neededAntennas: Number(formData.neededAntennas),
+      neededCpuCores: Number(formData.neededCpuCores),
+      neededGpuMem: Number(formData.neededGpuMem),
       duration: Number(formData.duration),
       status: 0, // Pending
       createTime: new Date().toISOString(), // Client-side timestamp fallback
@@ -53,13 +57,15 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
             name: '',
             priority: 50,
             neededAntennas: 16,
+            neededCpuCores: 8,
+            neededGpuMem: 4,
             duration: 60,
         });
       } else {
-        setError('Failed to submit task. Please check connection.');
+        setError(t.tasks?.form?.errorSubmitFailed || 'Failed to submit task. Please check connection.');
       }
     } catch (err) {
-      setError('An unexpected error occurred.');
+      setError(t.tasks?.form?.errorUnexpected || 'An unexpected error occurred.');
     } finally {
       setIsSubmitting(false);
     }
@@ -93,14 +99,14 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
           {/* Task Name */}
           <div>
             <label className="block text-sm font-medium theme-text-muted mb-1">
-              Job Name
+              {t.tasks?.form?.jobName || 'Job Name'}
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({...formData, name: e.target.value})}
               className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              placeholder="e.g. Beamforming Calibration"
+              placeholder={t.tasks?.form?.jobNamePlaceholder || 'e.g. Beamforming Calibration'}
             />
           </div>
 
@@ -108,7 +114,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
             {/* Priority */}
             <div>
               <label className="block text-sm font-medium theme-text-muted mb-1">
-                Priority (1-100)
+                {t.tasks?.form?.priority || 'Priority (1-100)'}
               </label>
               <input
                 type="number"
@@ -123,7 +129,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
             {/* Duration */}
             <div>
               <label className="block text-sm font-medium theme-text-muted mb-1">
-                Duration (Sec)
+                {t.tasks?.form?.duration || 'Duration (Sec)'}
               </label>
               <input
                 type="number"
@@ -135,21 +141,61 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
             </div>
           </div>
 
-          {/* Needed Antennas */}
-          <div>
-            <label className="block text-sm font-medium theme-text-muted mb-1">
-              Required Antennas
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="256"
-              step="1"
-              value={formData.neededAntennas}
-              onChange={(e) => setFormData({...formData, neededAntennas: parseInt(e.target.value) || 0})}
-              className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-            <p className="text-xs theme-text-muted mt-1">Available range: 1 - 256</p>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Needed Antennas */}
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.requiredAntennas || 'Required Antennas'}
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="256"
+                step="1"
+                value={formData.neededAntennas}
+                onChange={(e) => setFormData({...formData, neededAntennas: parseInt(e.target.value) || 0})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.rangeAntennas || 'Range: 1 - 256'}</p>
+            </div>
+
+            {/* Needed CPU Cores */}
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.cpuCores || 'CPU Cores'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="256"
+                step="1"
+                value={formData.neededCpuCores}
+                onChange={(e) => setFormData({...formData, neededCpuCores: parseInt(e.target.value) || 0})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.rangeCpu || 'Range: 0 - 256'}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* Needed GPU Mem */}
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.gpuMem || 'GPU Memory (GB)'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="256"
+                step="1"
+                value={formData.neededGpuMem}
+                onChange={(e) => setFormData({...formData, neededGpuMem: parseInt(e.target.value) || 0})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.rangeGpu || 'Range: 0 - 256'}</p>
+            </div>
+
+            <div className="hidden md:block"></div>
           </div>
 
           <div className="pt-4 flex justify-end space-x-3">
@@ -158,7 +204,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
               onClick={onClose}
               className="px-4 py-2 rounded-md theme-bg-main theme-border border theme-text-muted hover:text-white hover:border-slate-500 transition-colors"
             >
-              Cancel
+              {t.tasks?.form?.cancel || 'Cancel'}
             </button>
             <button
               type="submit"
@@ -168,12 +214,12 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
               {isSubmitting ? (
                 <>
                   <Loader2 size={16} className="mr-2 animate-spin" />
-                  Submitting...
+                  {t.tasks?.form?.submitting || 'Submitting...'}
                 </>
               ) : (
                 <>
                   <Save size={16} className="mr-2" />
-                  Submit Job
+                  {t.tasks?.form?.submit || 'Submit Job'}
                 </>
               )}
             </button>

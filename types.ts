@@ -21,9 +21,28 @@ export interface Task {
   priority: number; // Changed from string to number (Higher = greater priority)
   status: number; // 0:Pending, 1:Running, 2:Completed, 3:Failed
   neededAntennas: number; // New field
+  neededCpuCores?: number;
+  neededGpuMem?: number;
   duration: number; // in seconds
+  remainingSeconds?: number;
+  virtualShare?: number;
+  startTime?: string;
+  endTime?: string;
   createTime: string; // New field, replaces submittedAt
   resourceType?: 'CPU' | 'GPU' | 'FPGA'; // Optional, kept for UI compatibility if needed
+}
+
+export interface ScheduleLog {
+  id: number;
+  taskId: number;
+  action: string;
+  detail?: string;
+  createTime: string;
+}
+
+export interface SchedulerConfig {
+  strategy: string;
+  supported: string[];
 }
 
 export interface ResourceNode {
@@ -32,6 +51,23 @@ export interface ResourceNode {
   load: number; // 0-100
   temperature: number;
   status: 'Online' | 'Offline' | 'Maintenance';
+}
+
+export interface CpuResource {
+  id: number;
+  hostname: string;
+  ipAddress: string;
+  totalCores: number;
+  usedCores: number;
+  status: number; // 0: idle, 1: busy, 2: offline
+}
+
+export interface GpuResource {
+  id: number;
+  model: string;
+  totalMemory: number;
+  usedMemory: number;
+  status: number; // 0: idle, 1: busy, 2: fault
 }
 
 export interface AntennaUnit {

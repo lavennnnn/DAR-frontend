@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, Lock, ArrowRight, UserPlus, Loader2, Globe, Sun, Moon, Droplets } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -22,6 +22,19 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    try {
+      const expired = localStorage.getItem('auth_expired');
+      if (expired) {
+        setSessionExpired(true);
+        localStorage.removeItem('auth_expired');
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +131,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
-            {error && (
+          {sessionExpired && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400 text-sm text-center">
+              {t.login.sessionExpired}
+            </div>
+          )}
+          {error && (
                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center">
                   {error}
                 </div>

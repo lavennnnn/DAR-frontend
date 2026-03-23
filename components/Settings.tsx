@@ -1,50 +1,55 @@
-import React, { useState } from 'react';
-import { Bell, Save, Check, Loader2 } from 'lucide-react';
-import { Language, Theme } from '../types';
+import React, { useEffect, useState } from 'react';
+import { Bell } from 'lucide-react';
+import { api } from '../services/api';
 
 interface SettingsProps {
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  pushNotifications: boolean;
+  setPushNotifications: (enabled: boolean) => void;
   t: any;
 }
 
-const Settings: React.FC<SettingsProps> = ({ language, setLanguage, theme, setTheme, t }) => {
-  // Local state for other settings
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(false);
-  
-  // Loading and Success states for Save action
-  const [isSaving, setIsSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+const Settings: React.FC<SettingsProps> = ({ pushNotifications, setPushNotifications, t }) => {
+  const [strategy, setStrategy] = useState('DRF');
+  const [supportedStrategies, setSupportedStrategies] = useState<string[]>(['DRF', 'PRIORITY', 'FCFS']);
+  const [strategyStatus, setStrategyStatus] = useState<string | null>(null);
 
-  const handleSave = () => {
-    setIsSaving(true);
-    
-    // Simulate API call / Persistence
-    setTimeout(() => {
-      setIsSaving(false);
-      setShowSuccess(true);
-      
-      // Hide success message after 3 seconds
-      setTimeout(() => {
-        setShowSuccess(false);
-      }, 3000);
-    }, 800);
+  useEffect(() => {
+    const loadConfig = async () => {
+      const config = await api.fetchSchedulerConfig();
+      if (config?.strategy) {
+        setStrategy(config.strategy);
+      }
+      if (config?.supported && config.supported.length > 0) {
+        setSupportedStrategies(config.supported);
+      }
+    };
+    loadConfig();
+  }, []);
+
+  const formatStrategyLabel = (code: string) => {
+    if (code === 'DRF') return t.settings?.strategyDRF || 'DRF (Dominant Resource Fairness)';
+    if (code === 'PRIORITY') return t.settings?.strategyPriority || 'Priority First';
+    if (code === 'FCFS') return t.settings?.strategyFcfs || 'First Come First Serve';
+    return code;
+  };
+
+  const handleStrategyChange = async (value: string) => {
+    setStrategy(value);
+    setStrategyStatus(t.settings?.strategySaving || 'Saving...');
+    const updated = await api.updateSchedulerConfig(value);
+    if (updated?.strategy) {
+      setStrategy(updated.strategy);
+      setStrategyStatus(t.settings?.strategySaved || 'Saved.');
+    } else {
+      setStrategyStatus(t.settings?.strategyFailed || 'Save failed.');
+    }
+    setTimeout(() => setStrategyStatus(null), 2000);
   };
 
   return (
     <div className="space-y-6 relative">
-      <h2 className="text-2xl font-bold theme-text-main mb-6">{t.settings.title}</h2>
-      
-      {/* Toast Notification */}
-      {showSuccess && (
-        <div className="absolute top-0 right-0 bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 px-4 py-3 rounded-lg shadow-lg flex items-center animate-fade-in-down z-20">
-          <Check size={18} className="mr-2" />
-          <span className="font-medium">{t.settings.saveSuccess}</span>
-        </div>
-      )}
+      <h2 className="text-2xl font-bold theme-text-main mb-2">{t.settings.title}</h2>
+      <p className="text-sm theme-text-muted">{t.settings.autoApply ?? 'Changes apply immediately.'}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
@@ -59,19 +64,6 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage, theme, setTh
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Email Alerts Toggle */}
-            <div className="flex items-center justify-between p-3 theme-bg-main rounded-lg border theme-border">
-               <span className="theme-text-main font-medium">{t.settings.emailAlerts}</span>
-               <button 
-                 onClick={() => setEmailAlerts(!emailAlerts)}
-                 className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-slate-800 ${emailAlerts ? 'bg-blue-600' : 'bg-slate-600'}`}
-               >
-                 <span 
-                   className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 shadow ${emailAlerts ? 'translate-x-6' : 'translate-x-0'}`} 
-                 />
-               </button>
-            </div>
-
             {/* Push Notifications Toggle */}
             <div className="flex items-center justify-between p-3 theme-bg-main rounded-lg border theme-border">
                <span className="theme-text-main font-medium">{t.settings.pushNotifications}</span>
@@ -86,31 +78,38 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage, theme, setTh
             </div>
           </div>
         </div>
+
+        <div className="theme-bg-panel p-6 rounded-lg border theme-border shadow-xl md:col-span-2">
+          <div className="flex items-center mb-4">
+            <h3 className="text-lg font-semibold theme-text-main">{t.settings.strategyTitle || 'Scheduling Strategy'}</h3>
+          </div>
+          <p className="theme-text-muted text-sm mb-6">
+            {t.settings.strategyDesc || 'Select the algorithm used for pending task scheduling.'}
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="min-w-[220px]">
+              <label className="block text-sm theme-text-muted mb-2">
+                {t.settings.strategyLabel || 'Strategy'}
+              </label>
+              <select
+                value={strategy}
+                onChange={(e) => handleStrategyChange(e.target.value)}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              >
+                {supportedStrategies.map(code => (
+                  <option key={code} value={code}>
+                    {formatStrategyLabel(code)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {strategyStatus && (
+              <div className="text-xs theme-text-muted mt-6">{strategyStatus}</div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="flex justify-end mt-8 border-t theme-border pt-6">
-        <button 
-          onClick={handleSave}
-          disabled={isSaving}
-          className={`flex items-center px-6 py-3 rounded-md font-semibold transition-all shadow-lg min-w-[140px] justify-center ${
-             isSaving 
-               ? 'theme-bg-main theme-text-muted cursor-not-allowed border theme-border' 
-               : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-          }`}
-        >
-          {isSaving ? (
-            <>
-              <Loader2 size={18} className="mr-2 animate-spin" />
-              {t.settings.saving}
-            </>
-          ) : (
-            <>
-              <Save size={18} className="mr-2" />
-              {t.settings.save}
-            </>
-          )}
-        </button>
-      </div>
     </div>
   );
 };

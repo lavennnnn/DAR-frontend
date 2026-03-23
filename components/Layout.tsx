@@ -4,7 +4,6 @@ import {
   Radio,
   ListTodo,
   Settings,
-  Wand2,
   Menu,
   Bell,
   LogOut,
@@ -25,6 +24,9 @@ interface LayoutProps {
   setLanguage: (lang: Language) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  pushNotifications: boolean;
+  hasNotifications: boolean;
+  onClearNotifications: () => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -35,15 +37,18 @@ const Layout: React.FC<LayoutProps> = ({
                                          language,
                                          setLanguage,
                                          theme,
-                                         setTheme
+                                         setTheme,
+                                         pushNotifications,
+                                         hasNotifications,
+                                         onClearNotifications
                                        }) => {
   const { user, logout } = useAuth();
+  const showNotificationDot = pushNotifications && hasNotifications;
 
   const navItems = [
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
     { id: 'resources', label: t.nav.resources, icon: Radio },
     { id: 'tasks', label: t.nav.tasks, icon: ListTodo },
-    { id: 'ai-lab', label: t.nav.aiLab, icon: Wand2 },
     { id: 'settings', label: t.nav.settings, icon: Settings },
   ];
 
@@ -71,8 +76,8 @@ const Layout: React.FC<LayoutProps> = ({
   return (
       <div className="flex h-screen theme-bg-main overflow-hidden font-sans">
         {/* Sidebar */}
-        <aside className="w-64 theme-bg-panel border-r theme-border flex flex-col z-10 hidden md:flex">
-          <div className="p-6 border-b theme-border">
+        <aside className="w-60 theme-bg-panel border-r theme-border flex flex-col z-10 hidden md:flex">
+          <div className="p-5 border-b theme-border">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Radio className="text-white h-5 w-5" />
@@ -84,7 +89,7 @@ const Layout: React.FC<LayoutProps> = ({
             <p className="text-xs theme-text-muted mt-2">Resource Scheduling System</p>
           </div>
 
-          <nav className="flex-1 py-6 px-3 space-y-1">
+          <nav className="flex-1 py-5 px-3 space-y-1">
             {navItems.map((item) => (
                 <button
                     key={item.id}
@@ -131,7 +136,7 @@ const Layout: React.FC<LayoutProps> = ({
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header */}
-          <header className="h-16 theme-bg-panel backdrop-blur-md border-b theme-border flex items-center justify-between px-6 z-10">
+          <header className="h-14 theme-bg-panel backdrop-blur-md border-b theme-border flex items-center justify-between px-6 z-10">
             <div className="md:hidden">
               <Menu className="theme-text-muted" />
             </div>
@@ -157,16 +162,22 @@ const Layout: React.FC<LayoutProps> = ({
 
               <div className="h-6 w-px bg-slate-700 mx-2"></div>
 
-              <button className="relative p-2 theme-text-muted hover:text-white transition-colors">
+              <button
+                className="relative p-2 theme-text-muted hover:text-white transition-colors"
+                onClick={onClearNotifications}
+                title="Notifications"
+              >
                 <Bell size={20} />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                {showNotificationDot && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                )}
               </button>
             </div>
           </header>
 
           {/* Content Scroll Area */}
-          <main className="flex-1 overflow-y-auto theme-bg-main p-6">
-            <div className="max-w-7xl mx-auto h-full">
+          <main className="flex-1 overflow-y-auto theme-bg-main p-5">
+            <div className="max-w-6xl mx-auto h-full">
               {children}
             </div>
           </main>
