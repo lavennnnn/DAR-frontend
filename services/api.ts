@@ -1,4 +1,4 @@
-import { Task, AntennaUnit, User, LoginRequest, RegisterRequest, CpuResource, GpuResource, ScheduleLog, SchedulerConfig } from '../types';
+import { Task, AntennaUnit, PhysicalAntenna, User, LoginRequest, RegisterRequest, CpuResource, GpuResource, ScheduleLog } from '../types';
 
 // Assuming proxy is configured in vite.config.ts to forward /api to localhost:8080
 const BASE_URL = '/api';
@@ -60,7 +60,7 @@ export const api = {
         throw new Error('Login failed');
       }
       const res = await response.json();
-      if (res.code === '0') { // 后端 Result.SUCCESS_CODE 是 "0"
+      if (res.code === '0') { // 鍚庣 Result.SUCCESS_CODE 鏄?"0"
         return res.data;
       }
       return null;
@@ -84,7 +84,7 @@ export const api = {
       if (!response.ok) {
         throw new Error('Registration failed');
       }
-      //解析 JSON 并提取 .data
+      //瑙ｆ瀽 JSON 骞舵彁鍙?.data
       const res = await response.json();
       if (res.code === '0') {
         return res.data;
@@ -111,7 +111,10 @@ export const api = {
       }
       const res = await response.json();
       if (res.code === '0') {
-        return res.data || [];
+        return (res.data || []).map((item: any) => ({
+          ...item,
+          code: item.code ?? item.unitCode,
+        }));
       }
       return [];
     } catch (error) {
@@ -124,6 +127,99 @@ export const api = {
    * Fetch all CPU resources
    * GET /api/resource/cpu/list
    */
+  fetchPhysicalAntennas: async (): Promise<PhysicalAntenna[]> => {
+    try {
+      const response = await fetch(`${BASE_URL}/resource/antenna/physical/list`, {
+        headers: getHeaders()
+      });
+      if (handleUnauthorized(response)) return [];
+      if (!response.ok) {
+        throw new Error('Failed to fetch physical antennas');
+      }
+      const res = await response.json();
+      if (res.code === '0') {
+        return res.data || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('API Error:', error);
+      return [];
+    }
+  },
+
+  createPhysicalAntenna: async (antenna: Partial<PhysicalAntenna>): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BASE_URL}/resource/antenna/physical`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(antenna),
+      });
+      if (handleUnauthorized(response)) return false;
+      return response.ok;
+    } catch (error) {
+      console.error('Create Physical Antenna API Error:', error);
+      return false;
+    }
+  },
+
+  updatePhysicalAntenna: async (id: number, antenna: Partial<PhysicalAntenna>): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BASE_URL}/resource/antenna/physical/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(antenna),
+      });
+      if (handleUnauthorized(response)) return false;
+      return response.ok;
+    } catch (error) {
+      console.error('Update Physical Antenna API Error:', error);
+      return false;
+    }
+  },
+
+  deletePhysicalAntenna: async (id: number): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BASE_URL}/resource/antenna/physical/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      if (handleUnauthorized(response)) return false;
+      return response.ok;
+    } catch (error) {
+      console.error('Delete Physical Antenna API Error:', error);
+      return false;
+    }
+  },
+
+  updatePhysicalAntennaStatus: async (id: number, status: number): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BASE_URL}/resource/antenna/physical/${id}/status?status=${status}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+      });
+      if (handleUnauthorized(response)) return false;
+      return response.ok;
+    } catch (error) {
+      console.error('Update Physical Antenna Status API Error:', error);
+      return false;
+    }
+  },
+
+  batchCreatePhysicalAntennas: async (antennas: any[]): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BASE_URL}/resource/antenna/physical/batch`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(antennas),
+      });
+      if (handleUnauthorized(response)) return false;
+      return response.ok;
+    } catch (error) {
+      console.error('Batch Create Physical Antennas API Error:', error);
+      return false;
+    }
+  },
+
   fetchCPUs: async (): Promise<CpuResource[]> => {
     try {
       const response = await fetch(`${BASE_URL}/resource/cpu/list`, {
@@ -387,7 +483,7 @@ export const api = {
         headers: getHeaders(),
       });
       if (handleUnauthorized(response)) return false;
-      // 成功返回 true，失败返回 false
+      // 鎴愬姛杩斿洖 true锛屽け璐ヨ繑鍥?false
       return response.ok;
     } catch (error) {
       console.error('Cancel Task API Error:', error);
@@ -434,56 +530,6 @@ export const api = {
     } catch (error) {
       console.error('Schedule Log API Error:', error);
       return [];
-    }
-  }
-  ,
-  /**
-   * Fetch scheduler config
-   * GET /api/scheduler/config
-   */
-  fetchSchedulerConfig: async (): Promise<SchedulerConfig | null> => {
-    try {
-      const response = await fetch(`${BASE_URL}/scheduler/config`, {
-        headers: getHeaders()
-      });
-      if (handleUnauthorized(response)) return null;
-      if (!response.ok) {
-        throw new Error('Failed to fetch scheduler config');
-      }
-      const res = await response.json();
-      if (res.code === '0') {
-        return res.data || null;
-      }
-      return null;
-    } catch (error) {
-      console.error('Scheduler Config API Error:', error);
-      return null;
-    }
-  },
-
-  /**
-   * Update scheduler strategy
-   * PUT /api/scheduler/config
-   */
-  updateSchedulerConfig: async (strategy: string): Promise<SchedulerConfig | null> => {
-    try {
-      const response = await fetch(`${BASE_URL}/scheduler/config`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({ strategy }),
-      });
-      if (handleUnauthorized(response)) return null;
-      if (!response.ok) {
-        throw new Error('Failed to update scheduler config');
-      }
-      const res = await response.json();
-      if (res.code === '0') {
-        return res.data || null;
-      }
-      return null;
-    } catch (error) {
-      console.error('Update Scheduler Config API Error:', error);
-      return null;
     }
   },
   /**
@@ -543,3 +589,6 @@ export const api = {
     }
   }
 };
+
+
+

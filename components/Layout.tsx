@@ -70,7 +70,7 @@ const Layout: React.FC<LayoutProps> = ({
 
   // Logic to determine display name and initials
   // Prioritize nickname, then username.
-  const displayName = user?.nickname || user?.username || 'User';
+  const displayName = user?.nickname || user?.username || t.common?.user || 'User';
   const initials = (user?.nickname || user?.username || 'US').substring(0, 2).toUpperCase();
 
   return (
@@ -86,7 +86,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {t.appTitle === 'ArraySys' ? <>Array<span className="text-blue-500">Sys</span></> : t.appTitle}
               </h1>
             </div>
-            <p className="text-xs theme-text-muted mt-2">Resource Scheduling System</p>
+            <p className="text-xs theme-text-muted mt-2">{t.nav?.tasks || 'Resource Scheduling System'}</p>
           </div>
 
           <nav className="flex-1 py-5 px-3 space-y-1">
@@ -110,22 +110,22 @@ const Layout: React.FC<LayoutProps> = ({
           </nav>
 
           <div className="p-4 border-t theme-border">
-            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-700/30">
+            <div className="flex items-center justify-between p-2 rounded-lg theme-surface-panel">
               <div className="flex items-center min-w-0">
-                <div className="w-8 h-8 rounded-full bg-slate-600 flex-shrink-0 flex items-center justify-center text-xs font-bold text-white uppercase">
+                <div className="w-8 h-8 rounded-full theme-avatar-surface flex-shrink-0 flex items-center justify-center text-xs font-bold uppercase">
                   {initials}
                 </div>
                 <div className="ml-3 min-w-0">
                   <p className="text-sm font-medium theme-text-main truncate" title={displayName}>
                     {displayName}
                   </p>
-                  <p className="text-xs theme-text-muted">Operator</p>
+                  <p className="text-xs theme-text-muted">{t.common?.operator || 'Operator'}</p>
                 </div>
               </div>
               <button
                   onClick={logout}
-                  className="ml-2 p-1.5 text-slate-400 hover:text-white hover:bg-slate-600 rounded-md transition-colors"
-                  title="Logout"
+                  className="ml-2 p-1.5 theme-text-muted rounded-md transition-colors theme-surface-hover"
+                  title={t.common?.logout || 'Logout'}
               >
                 <LogOut size={16} />
               </button>
@@ -155,7 +155,7 @@ const Layout: React.FC<LayoutProps> = ({
               <button
                   onClick={toggleTheme}
                   className="p-2 theme-text-muted hover:text-white transition-colors rounded-full hover:bg-slate-700/50"
-                  title="Switch Theme"
+                  title={t.common?.switchTheme || 'Switch Theme'}
               >
                 {getThemeIcon()}
               </button>
@@ -165,7 +165,7 @@ const Layout: React.FC<LayoutProps> = ({
               <button
                 className="relative p-2 theme-text-muted hover:text-white transition-colors"
                 onClick={onClearNotifications}
-                title="Notifications"
+                title={t.common?.notifications || 'Notifications'}
               >
                 <Bell size={20} />
                 {showNotificationDot && (

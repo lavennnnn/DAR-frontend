@@ -4,7 +4,17 @@ import { AntennaUnit, AntennaStatus } from '../types';
 
 interface ArrayVisualizerProps {
   data: AntennaUnit[];
-  labels: { unitId: string; status: string; signal: string };
+  labels: {
+    unitId: string;
+    status: string;
+    signal: string;
+    phase?: string;
+    code?: string;
+    notAvailable?: string;
+    active?: string;
+    fault?: string;
+    idle?: string;
+  };
   onUnitClick?: (unit: AntennaUnit) => void;
 }
 
@@ -110,9 +120,9 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
           }
         })
       .on("mouseover", (event, d) => {
-        const statusText = 
-          d.status === AntennaStatus.Active ? 'Active' : 
-          d.status === AntennaStatus.Fault ? 'Fault' : 'Idle';
+        const statusText =
+          d.status === AntennaStatus.Active ? (labels.active || 'Active') :
+          d.status === AntennaStatus.Fault ? (labels.fault || 'Fault') : (labels.idle || 'Idle');
           
         tooltip
           .style("visibility", "visible")
@@ -120,8 +130,8 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
             <strong>${labels.unitId}: ${d.id}</strong><br/>
             ${labels.status}: ${statusText}<br/>
             ${labels.signal}: ${d.amplitude}%<br/>
-            Phase: ${d.phase?.toFixed(2) || 0}<br/>
-            Code: ${d.code || 'N/A'}
+            ${labels.phase || 'Phase'}: ${d.phase?.toFixed(2) || 0}<br/>
+            ${labels.code || 'Code'}: ${d.code || labels.notAvailable || 'N/A'}
           `);
         d3.select(event.currentTarget).attr("stroke", "#ffffff").attr("stroke-width", 2);
       })

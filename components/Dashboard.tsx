@@ -26,10 +26,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, resources, t }) => {
   }));
 
   const taskStatusData = [
-    { name: 'Pending', count: tasks.filter(t => t.status === TaskStatus.Pending).length },
-    { name: 'Running', count: tasks.filter(t => t.status === TaskStatus.Running).length },
-    { name: 'Completed', count: tasks.filter(t => t.status === TaskStatus.Completed).length },
-    { name: 'Failed', count: tasks.filter(t => t.status === TaskStatus.Failed).length },
+    { name: t.dashboard?.statusPending || 'Pending', count: tasks.filter(t => t.status === TaskStatus.Pending).length },
+    { name: t.dashboard?.statusRunning || 'Running', count: tasks.filter(t => t.status === TaskStatus.Running).length },
+    { name: t.dashboard?.statusCompleted || 'Completed', count: tasks.filter(t => t.status === TaskStatus.Completed).length },
+    { name: t.dashboard?.statusCanceled || 'Canceled', count: tasks.filter(t => t.status === TaskStatus.Canceled).length },
   ];
 
   return (
@@ -111,7 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, resources, t }) => {
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-500">
-                No resource data available
+                {t.dashboard?.noResourceData || 'No resource data available'}
               </div>
             )}
           </div>

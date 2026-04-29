@@ -17,6 +17,14 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
     neededAntennas: 16,
     neededCpuCores: 8,
     neededGpuMem: 4,
+    beamFrequency: '',
+    beamGroup: '',
+    preferredSurface: '',
+    deadlineMs: 200,
+    allowCrossSurface: true,
+    targetReuseLimit: 3,
+    dependsOnTaskIds: '',
+    repelTaskIds: '',
     duration: 60,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,16 +44,29 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
       return;
     }
 
+    if (formData.beamFrequency !== '' && Number.isNaN(Number(formData.beamFrequency))) {
+      setError(t.tasks?.form?.errorFrequencyInvalid || 'Beam frequency must be a valid number');
+      setIsSubmitting(false);
+      return;
+    }
+
     const newTask: Partial<Task> = {
       name: formData.name,
       priority: Number(formData.priority),
       neededAntennas: Number(formData.neededAntennas),
       neededCpuCores: Number(formData.neededCpuCores),
       neededGpuMem: Number(formData.neededGpuMem),
+      beamFrequency: formData.beamFrequency === '' ? undefined : Number(formData.beamFrequency),
+      beamGroup: formData.beamGroup.trim() || undefined,
+      preferredSurface: formData.preferredSurface.trim() || undefined,
+      deadlineMs: Number(formData.deadlineMs),
+      allowCrossSurface: formData.allowCrossSurface,
+      targetReuseLimit: Number(formData.targetReuseLimit),
+      dependsOnTaskIds: formData.dependsOnTaskIds.trim() || undefined,
+      repelTaskIds: formData.repelTaskIds.trim() || undefined,
       duration: Number(formData.duration),
       status: 0, // Pending
       createTime: new Date().toISOString(), // Client-side timestamp fallback
-      resourceType: 'FPGA' // Default resource type
     };
 
     try {
@@ -59,6 +80,14 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
             neededAntennas: 16,
             neededCpuCores: 8,
             neededGpuMem: 4,
+            beamFrequency: '',
+            beamGroup: '',
+            preferredSurface: '',
+            deadlineMs: 200,
+            allowCrossSurface: true,
+            targetReuseLimit: 3,
+            dependsOnTaskIds: '',
+            repelTaskIds: '',
             duration: 60,
         });
       } else {
@@ -73,7 +102,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="theme-bg-panel w-full max-w-md rounded-lg border theme-border shadow-2xl overflow-hidden transform transition-all">
+      <div className="theme-bg-panel w-full max-w-3xl rounded-lg border theme-border shadow-2xl overflow-hidden transform transition-all">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b theme-border bg-slate-700/20">
           <h3 className="text-lg font-bold theme-text-main flex items-center">
@@ -89,7 +118,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[78vh] overflow-y-auto">
           {error && (
             <div className="p-3 bg-red-500/20 border border-red-500/30 rounded text-red-400 text-sm">
               {error}
@@ -195,9 +224,129 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
               <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.rangeGpu || 'Range: 0 - 256'}</p>
             </div>
 
-            <div className="hidden md:block"></div>
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.beamFrequency || 'Beam Frequency'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={formData.beamFrequency}
+                onChange={(e) => setFormData({...formData, beamFrequency: e.target.value})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder={t.tasks?.form?.beamFrequencyPlaceholder || 'e.g. 10.5'}
+              />
+              <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.beamFrequencyHint || 'Optional: used for antenna frequency conflict detection'}</p>
+            </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.beamGroup || 'Beam Group'}
+              </label>
+              <input
+                type="text"
+                value={formData.beamGroup}
+                onChange={(e) => setFormData({...formData, beamGroup: e.target.value})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder={t.tasks?.form?.beamGroupPlaceholder || 'e.g. surface-A'}
+              />
+              <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.beamGroupHint || 'Optional: tasks in different groups may conflict when frequencies are close'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.preferredSurface || 'Preferred Surface'}
+              </label>
+              <input
+                type="text"
+                value={formData.preferredSurface}
+                onChange={(e) => setFormData({...formData, preferredSurface: e.target.value})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder={t.tasks?.form?.preferredSurfacePlaceholder || 'e.g. SURFACE-A'}
+              />
+              <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.preferredSurfaceHint || 'Optional: constrain antenna allocation to one surface'}</p>
+            </div>
+          </div>
+
+          <div className="rounded-lg border theme-border bg-slate-800/20 p-4">
+            <div className="text-sm font-semibold theme-text-main mb-1">
+              {t.tasks?.form?.scenarioConfig || 'Scheduling Scenario'}
+            </div>
+            <p className="text-xs theme-text-muted">
+              {t.tasks?.form?.scenarioConfigHint || 'Describe task constraints only. The system will choose the scheduling path automatically.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.deadlineMs || 'Deadline (ms)'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.deadlineMs}
+                onChange={(e) => setFormData({...formData, deadlineMs: parseInt(e.target.value) || 0})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.deadlineHint || 'Optional: smaller value means stronger real-time preference'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.targetReuseLimit || 'Reuse Limit'}
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={formData.targetReuseLimit}
+                onChange={(e) => setFormData({...formData, targetReuseLimit: parseInt(e.target.value) || 1})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <p className="text-xs theme-text-muted mt-1">{t.tasks?.form?.reuseHint || 'Maximum active reuse allowed for a unit'}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-sm theme-text-main">
+                <input
+                  type="checkbox"
+                  checked={formData.allowCrossSurface}
+                  onChange={(e) => setFormData({...formData, allowCrossSurface: e.target.checked})}
+                  className="rounded border theme-border"
+                />
+                {t.tasks?.form?.allowCrossSurface || 'Allow Cross Surface'}
+              </label>
+            </div>
+            <div>
+              <label className="block text-sm font-medium theme-text-muted mb-1">
+                {t.tasks?.form?.dependsOnTaskIds || 'Depends On Task IDs'}
+              </label>
+              <input
+                type="text"
+                value={formData.dependsOnTaskIds}
+                onChange={(e) => setFormData({...formData, dependsOnTaskIds: e.target.value})}
+                className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder={t.tasks?.form?.taskIdsPlaceholder || 'e.g. 12, 15'}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium theme-text-muted mb-1">
+              {t.tasks?.form?.repelTaskIds || 'Repel Task IDs'}
+            </label>
+            <input
+              type="text"
+              value={formData.repelTaskIds}
+              onChange={(e) => setFormData({...formData, repelTaskIds: e.target.value})}
+              className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              placeholder={t.tasks?.form?.taskIdsPlaceholder || 'e.g. 18, 21'}
+            />
+          </div>
           <div className="pt-4 flex justify-end space-x-3">
             <button
               type="button"
@@ -231,3 +380,5 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ isOpen, onClose, onSucces
 };
 
 export default TaskFormModal;
+
+

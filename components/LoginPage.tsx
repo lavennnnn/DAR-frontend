@@ -101,15 +101,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
         <div className="absolute top-6 right-6 flex space-x-2 z-20">
           <button
               onClick={toggleLanguage}
-              className="p-2 theme-text-muted hover:text-white transition-colors theme-bg-panel rounded-full border theme-border shadow-lg"
+              className="p-2 theme-text-muted transition-colors rounded-full border theme-border shadow-lg theme-surface-button"
               title={language === 'en' ? 'Switch to Chinese' : '切换到英文'}
           >
             <Globe size={20} />
           </button>
           <button
               onClick={toggleTheme}
-              className="p-2 theme-text-muted hover:text-white transition-colors theme-bg-panel rounded-full border theme-border shadow-lg"
-              title="Switch Theme"
+              className="p-2 theme-text-muted transition-colors rounded-full border theme-border shadow-lg theme-surface-button"
+              title={t.common?.switchTheme || 'Switch Theme'}
           >
             {getThemeIcon()}
           </button>
@@ -117,7 +117,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
 
         <div className="w-full max-w-md theme-bg-panel rounded-xl shadow-2xl overflow-hidden border theme-border transition-colors duration-300">
           {/* Header */}
-          <div className="p-8 text-center border-b theme-border bg-slate-700/10">
+          <div className="p-8 text-center border-b theme-border theme-surface-strong">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/20">
               <User className="text-white w-8 h-8" />
             </div>
@@ -152,7 +152,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
                       required
                       value={formData.username}
                       onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main theme-placeholder focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                       placeholder={t.login.enterUser}
                   />
                 </div>
@@ -168,7 +168,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
                           required
                           value={formData.nickname}
                           onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
-                          className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                          className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main theme-placeholder focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                           placeholder={t.login.enterNick}
                       />
                     </div>
@@ -184,8 +184,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
                       required
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="••••••••"
+                      className="w-full theme-bg-main border theme-border rounded-lg py-2.5 pl-10 pr-4 theme-text-main theme-placeholder focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      placeholder={t.common?.passwordPlaceholder || 'Enter password'}
                   />
                 </div>
               </div>

@@ -6,7 +6,8 @@ export enum TaskStatus {
   Pending = 0,
   Running = 1,
   Completed = 2,
-  Failed = 3
+  Canceled = 3,
+  Failed = 4
 }
 
 export enum AntennaStatus {
@@ -23,6 +24,16 @@ export interface Task {
   neededAntennas: number; // New field
   neededCpuCores?: number;
   neededGpuMem?: number;
+  beamFrequency?: number;
+  beamGroup?: string;
+  preferredSurface?: string;
+  antennaScheduleMode?: 'AUTO' | 'BFS' | 'DIJKSTRA' | 'GREEDY' | 'HEAP' | 'DP';
+  deadlineMs?: number;
+  allowCrossSurface?: boolean;
+  targetReuseLimit?: number;
+  computeScheduleMode?: 'BALANCE' | 'PACKED';
+  dependsOnTaskIds?: string;
+  repelTaskIds?: string;
   duration: number; // in seconds
   remainingSeconds?: number;
   virtualShare?: number;
@@ -38,11 +49,6 @@ export interface ScheduleLog {
   action: string;
   detail?: string;
   createTime: string;
-}
-
-export interface SchedulerConfig {
-  strategy: string;
-  supported: string[];
 }
 
 export interface ResourceNode {
@@ -70,15 +76,28 @@ export interface GpuResource {
   status: number; // 0: idle, 1: busy, 2: fault
 }
 
+export interface PhysicalAntenna {
+  id: number;
+  code: string;
+  name?: string;
+  surfaceCode?: string;
+  xPos?: number;
+  yPos?: number;
+  status: number;
+}
+
 export interface AntennaUnit {
   id: number;
-  xPos: number; // Changed from x
-  yPos: number; // Changed from y
-  status: number; // 0:Idle, 1:Active, 2:Fault
-  amplitude: number; // Changed from signalStrength
-  phase: number; // New field
-  code: string; // New field
-  taskId: number | null; // New field
+  antennaId?: number;
+  unitCode?: string;
+  xPos: number;
+  yPos: number;
+  status: number;
+  amplitude: number;
+  phase: number;
+  code?: string;
+  taskId: number | null;
+  surfaceCode?: string;
 }
 
 export interface User {
@@ -98,3 +117,4 @@ export interface RegisterRequest {
   password: string;
   nickname: string;
 }
+

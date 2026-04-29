@@ -40,7 +40,7 @@ const AIImageEditor: React.FC<AIImageEditorProps> = ({ t }) => {
       const result = await editImageWithGemini(base64Data, mimeType, prompt);
       setGeneratedImage(result);
     } catch (err) {
-      setError('Failed to process image. Please try again.');
+      setError(t.aiLab?.processFailed || 'Failed to process image. Please try again.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -130,7 +130,7 @@ const AIImageEditor: React.FC<AIImageEditorProps> = ({ t }) => {
             <h3 className="text-sm font-semibold theme-text-muted mb-2 uppercase tracking-wider">{t.aiLab.original}</h3>
             <div className="flex-1 theme-bg-main rounded-lg border theme-border overflow-hidden flex items-center justify-center relative min-h-[300px]">
               {selectedImage ? (
-                <img src={selectedImage} alt="Original" className="max-w-full max-h-full object-contain" />
+                <img src={selectedImage} alt={t.aiLab?.originalAlt || 'Original'} className="max-w-full max-h-full object-contain" />
               ) : (
                 <div className="theme-text-muted flex flex-col items-center">
                   <ImageIcon size={48} className="mb-2 opacity-50" />
@@ -145,7 +145,7 @@ const AIImageEditor: React.FC<AIImageEditorProps> = ({ t }) => {
             <h3 className="text-sm font-semibold theme-text-muted mb-2 uppercase tracking-wider">{t.aiLab.result}</h3>
             <div className="flex-1 theme-bg-main rounded-lg border theme-border overflow-hidden flex items-center justify-center relative min-h-[300px]">
               {generatedImage ? (
-                <img src={generatedImage} alt="AI Generated" className="max-w-full max-h-full object-contain" />
+                <img src={generatedImage} alt={t.aiLab?.generatedAlt || 'AI Generated'} className="max-w-full max-h-full object-contain" />
               ) : loading ? (
                 <div className="text-slate-500 flex flex-col items-center animate-pulse">
                   <Wand2 size={48} className="mb-2 opacity-50" />

@@ -5,7 +5,7 @@ import ArrayVisualizer from './components/ArrayVisualizer';
 import Settings from './components/Settings';
 import TaskFormModal from './components/TaskFormModal';
 import LoginPage from './components/LoginPage';
-import { Task, ResourceNode, AntennaUnit, Language, Theme, TaskStatus, AntennaStatus, CpuResource, GpuResource, ScheduleLog } from './types';
+import { Task, ResourceNode, AntennaUnit, PhysicalAntenna, Language, Theme, TaskStatus, AntennaStatus, CpuResource, GpuResource, ScheduleLog } from './types';
 import { translations } from './utils/translations';
 import { api } from './services/api';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -25,6 +25,12 @@ const formatTime = (isoString: string) => {
 const mapStatus = (status: number): 'Online' | 'Offline' | 'Maintenance' => {
   if (status === 2) return 'Offline';
   if (status === 1) return 'Maintenance';
+  return 'Online';
+};
+
+const mapPhysicalAntennaStatus = (status: number): 'Online' | 'Busy' | 'Fault' => {
+  if (status === 2) return 'Fault';
+  if (status === 1) return 'Busy';
   return 'Online';
 };
 
@@ -56,10 +62,11 @@ const buildResourceNodes = (cpus: CpuResource[], gpus: GpuResource[]): ResourceN
   return [...cpuNodes, ...gpuNodes];
 };
 
-type BatchType = 'antenna' | 'cpu' | 'gpu';
+type BatchType = 'physicalAntenna' | 'antenna' | 'cpu' | 'gpu';
 
 const createBatchRow = (type: BatchType): Record<string, string> => {
-  if (type === 'antenna') return { code: '', xPos: '', yPos: '' };
+  if (type === 'physicalAntenna') return { code: '', name: '', surfaceCode: '', xPos: '', yPos: '' };
+  if (type === 'antenna') return { antennaId: '', unitCode: '', xPos: '', yPos: '', surfaceCode: '', phase: '0', amplitude: '1' };
   if (type === 'cpu') return { hostname: '', ipAddress: '', totalCores: '' };
   return { model: '', totalMemory: '' };
 };
@@ -73,7 +80,7 @@ function App() {
   const [scheduleLogs, setScheduleLogs] = useState<ScheduleLog[]>([]);
   const [isLogLoading, setIsLogLoading] = useState(false);
   const [isBatchOpen, setIsBatchOpen] = useState(false);
-  const [batchType, setBatchType] = useState<BatchType>('antenna');
+  const [batchType, setBatchType] = useState<BatchType>('physicalAntenna');
   const [batchRows, setBatchRows] = useState<Array<Record<string, string>>>(() => [
     createBatchRow('antenna')
   ]);
@@ -84,6 +91,7 @@ function App() {
   const [editError, setEditError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; visible: boolean }>>([]);
   const [resourceTab, setResourceTab] = useState<'antenna' | 'compute'>('antenna');
+  const [antennaResourceTab, setAntennaResourceTab] = useState<'physical' | 'unit'>('physical');
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchLoading, setBatchLoading] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
@@ -126,6 +134,7 @@ function App() {
   const [resources, setResources] = useState<ResourceNode[]>([]);
   const [cpus, setCpus] = useState<CpuResource[]>([]);
   const [gpus, setGpus] = useState<GpuResource[]>([]);
+  const [physicalAntennas, setPhysicalAntennas] = useState<PhysicalAntenna[]>([]);
   const [antennas, setAntennas] = useState<AntennaUnit[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [pastPage, setPastPage] = useState(1);
@@ -139,8 +148,26 @@ function App() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
   const t = translations[language];
+  const getResourceStatusLabel = (status: 'Online' | 'Offline' | 'Maintenance' | 'Busy') => {
+    if (status === 'Online') return t.resources?.statusOnline || 'Online';
+    if (status === 'Offline') return t.resources?.statusOffline || 'Offline';
+    if (status === 'Maintenance') return t.resources?.statusMaintenance || 'Maintenance';
+    return t.resources?.physicalBusy || 'Busy';
+  };
+  const getAntennaStatusLabel = (status: number) => {
+    if (status === AntennaStatus.Active) return t.resources?.statusActive || 'Active';
+    if (status === AntennaStatus.Fault) return t.resources?.statusFault || 'Fault';
+    return t.resources?.statusIdle || 'Idle';
+  };
+  const getTaskStatusLabel = (status: number) => {
+    if (status === TaskStatus.Running) return t.tasks?.status?.running || 'Running';
+    if (status === TaskStatus.Completed) return t.tasks?.status?.completed || 'Completed';
+    if (status === TaskStatus.Canceled) return t.tasks?.status?.canceled || 'Canceled';
+    if (status === TaskStatus.Failed) return t.tasks?.status?.failed || 'Failed';
+    return t.tasks?.status?.pending || 'Pending';
+  };
   const activeTasks = tasks.filter(t => t.status === TaskStatus.Pending || t.status === TaskStatus.Running);
-  const pastTasks = tasks.filter(t => t.status === TaskStatus.Completed || t.status === TaskStatus.Failed);
+  const pastTasks = tasks.filter(t => t.status === TaskStatus.Completed || t.status === TaskStatus.Canceled || t.status === TaskStatus.Failed);
   const pastTotalPages = Math.max(1, Math.ceil(pastTasks.length / PAST_PAGE_SIZE));
   const pastPageStart = (pastPage - 1) * PAST_PAGE_SIZE;
   const pagedPastTasks = pastTasks.slice(pastPageStart, pastPageStart + PAST_PAGE_SIZE);
@@ -162,13 +189,15 @@ function App() {
   // Fetch initial data from backend
   const loadData = async () => {
     // Fetch Antennas (User Request)
-    const antennaData = await api.fetchAntennas();
+    const [physicalAntennaData, antennaData, taskData] = await Promise.all([
+      api.fetchPhysicalAntennas(),
+      api.fetchAntennas(),
+      api.fetchTasks()
+    ]);
+    setPhysicalAntennas(physicalAntennaData);
     setAntennas(antennaData);
 
     await loadResources();
-
-    // Fetch Tasks (To support Task Tab)
-    const taskData = await api.fetchTasks();
     setTasks(taskData);
   };
 
@@ -230,7 +259,7 @@ function App() {
 
     console.log('Received WebSocket Message:', lastMessage);
     const messageType = lastMessage.type;
-    if (messageType === 'TASK_END' || messageType === 'ALERT') {
+    if (messageType === 'TASK_END' || messageType === 'TASK_CANCEL' || messageType === 'ALERT') {
       setHasNotifications(true);
     }
 
@@ -272,6 +301,24 @@ function App() {
       // Refresh CPU/GPU load when a task ends
       loadResources();
       // Refresh tasks to get updated remainingSeconds/virtualShare
+      loadData();
+      if (selectedTask && selectedTask.id === taskId) {
+        fetchScheduleLogs(taskId);
+      }
+    } else if (lastMessage.type === 'TASK_CANCEL') {
+      const { taskId } = lastMessage;
+
+      setTasks(prev => prev.map(t =>
+          t.id === taskId ? { ...t, status: TaskStatus.Canceled } : t
+      ));
+
+      setAntennas(prev => prev.map(a =>
+          a.taskId === taskId
+              ? { ...a, status: AntennaStatus.Idle, taskId: null }
+              : a
+      ));
+
+      loadResources();
       loadData();
       if (selectedTask && selectedTask.id === taskId) {
         fetchScheduleLogs(taskId);
@@ -325,6 +372,12 @@ function App() {
     fetchScheduleLogs(selectedTask.id);
   }, [selectedTask]);
 
+  useEffect(() => {
+    if (!selectedTask) return;
+    const id = setInterval(() => fetchScheduleLogs(selectedTask.id), 5000);
+    return () => clearInterval(id);
+  }, [selectedTask?.id]);
+
   const parseLogTime = (value: any) => {
     if (!value) return null;
     if (typeof value === 'number') {
@@ -357,6 +410,14 @@ function App() {
         return t.tasks?.detail?.completed || 'Completed';
       case 'CANCEL':
         return t.tasks?.detail?.canceled || 'Canceled';
+      case 'WAIT_RESOURCE':
+        return t.tasks?.detail?.waitingResource || 'Waiting for Resource';
+      case 'WAIT_COMPUTE':
+        return t.tasks?.detail?.waitingCompute || 'Waiting for Compute';
+      case 'WAIT_ANTENNA':
+        return t.tasks?.detail?.waitingAntenna || 'Waiting for Antenna Units';
+      case 'WAIT_ALLOCATE':
+        return t.tasks?.detail?.allocationRetry || 'Allocation Retry';
       case 'SCHEDULE_START':
       default:
         return t.tasks?.detail?.scheduled || 'Scheduled';
@@ -371,10 +432,97 @@ function App() {
         return 'bg-emerald-400';
       case 'CANCEL':
         return 'bg-red-400';
+      case 'WAIT_RESOURCE':
+      case 'WAIT_COMPUTE':
+      case 'WAIT_ANTENNA':
+      case 'WAIT_ALLOCATE':
+        return 'bg-yellow-400';
       case 'SCHEDULE_START':
       default:
         return 'bg-blue-400';
     }
+  };
+
+  const extractLogValue = (detail: string | undefined, key: string, nextKeys: string[]) => {
+    if (!detail) return '';
+    const startToken = `${key}=`;
+    const start = detail.indexOf(startToken);
+    if (start < 0) return '';
+    const valueStart = start + startToken.length;
+    const nextPositions = nextKeys
+      .map(nextKey => detail.indexOf(`,${nextKey}=`, valueStart))
+      .filter(pos => pos >= 0);
+    const end = nextPositions.length > 0 ? Math.min(...nextPositions) : detail.length;
+    return detail.slice(valueStart, end).trim();
+  };
+
+  const parseCpuPlan = (raw: string) => {
+    if (!raw || raw === '-') return [];
+    return raw
+      .split(',')
+      .map(item => {
+        const [node, cores] = item.split(':');
+        return { node: node?.trim(), cores: Number(cores) };
+      })
+      .filter(item => item.node && Number.isFinite(item.cores));
+  };
+
+  const scenarioLabel = (code: string) => {
+    const labels: Record<string, string> = {
+      DEPENDENCY_CONSTRAINED: t.tasks?.scenario?.dependencyConstrained || 'Dependency constrained',
+      GPU_ACCELERATED: t.tasks?.scenario?.gpuAccelerated || 'GPU-assisted task',
+      LOW_LATENCY: t.tasks?.scenario?.lowLatency || 'Low-latency task',
+      HIGH_PRIORITY_SMALL: t.tasks?.scenario?.highPrioritySmall || 'High-priority small task',
+      LARGE_ARRAY: t.tasks?.scenario?.largeArray || 'Large antenna-unit request',
+      CPU_INTENSIVE: t.tasks?.scenario?.cpuIntensive || 'CPU-intensive task',
+      BALANCED_MULTI_RESOURCE: t.tasks?.scenario?.balancedMultiResource || 'Balanced multi-resource task'
+    };
+    return labels[code] || code || '-';
+  };
+
+  const decisionLabel = (code: string) => {
+    const labels: Record<string, string> = {
+      DEPENDENCY_SAFE: t.tasks?.decision?.dependencySafe || 'Wait until dependency and exclusion rules are safe.',
+      GPU_LOCALITY_SINGLE_CARD: t.tasks?.decision?.gpuLocalitySingleCard || 'Use single-card GPU placement and compact compute allocation.',
+      FAST_FEASIBLE: t.tasks?.decision?.fastFeasible || 'Prioritize a fast feasible placement under the deadline.',
+      QUALITY_LOW_REUSE: t.tasks?.decision?.qualityLowReuse || 'Prefer low-reuse antenna units and higher-quality placement.',
+      LARGE_SINGLE_SURFACE: t.tasks?.decision?.largeSingleSurface || 'Keep allocation inside the requested surface and search for a feasible block.',
+      SCALABLE_CROSS_SURFACE: t.tasks?.decision?.scalableCrossSurface || 'Expand the search across surfaces to improve feasibility.',
+      COMPUTE_LOAD_BALANCE: t.tasks?.decision?.computeLoadBalance || 'Spread CPU load to avoid hot spots.',
+      FAIR_BALANCED: t.tasks?.decision?.fairBalanced || 'Use fair-share ordering and balanced resource placement.'
+    };
+    return labels[code] || code || '-';
+  };
+
+  const getLatestScheduleSummary = () => {
+    const latest = scheduleLogs
+      .filter(log => log.action === 'SCHEDULE_START')
+      .slice()
+      .sort((a, b) => (parseLogTime(b.createTime) || 0) - (parseLogTime(a.createTime) || 0))[0];
+    if (!latest) return null;
+    const detail = latest.detail || '';
+    const scenario = extractLogValue(detail, 'scenario', ['decision', 'antennas', 'cpu', 'gpu', 'computeMode', 'computeScore', 'computeDetail', 'algorithm', 'surface']);
+    const decision = extractLogValue(detail, 'decision', ['antennas', 'cpu', 'gpu', 'computeMode', 'computeScore', 'computeDetail', 'algorithm', 'surface']);
+    const cpu = extractLogValue(detail, 'cpu', ['gpu', 'computeMode', 'computeScore', 'computeDetail', 'algorithm', 'surface']);
+    const gpu = extractLogValue(detail, 'gpu', ['computeMode', 'computeScore', 'computeDetail', 'algorithm', 'surface']);
+    const mode = extractLogValue(detail, 'computeMode', ['computeScore', 'computeDetail', 'algorithm', 'surface']);
+    const score = extractLogValue(detail, 'computeScore', ['computeDetail', 'algorithm', 'surface']);
+    const computeDetail = extractLogValue(detail, 'computeDetail', ['algorithm', 'surface']);
+    const algorithm = extractLogValue(detail, 'algorithm', ['surface']);
+    const surface = extractLogValue(detail, 'surface', []);
+    return {
+      time: latest.createTime,
+      scenario,
+      decision,
+      cpu,
+      cpuPlan: parseCpuPlan(cpu),
+      gpu,
+      mode,
+      score,
+      computeDetail,
+      algorithm,
+      surface
+    };
   };
 
   const getDisplayedRemaining = (task: Task) => {
@@ -451,7 +599,7 @@ function App() {
     if (ok) {
       loadData();
     } else {
-      alert('Delete failed.');
+      alert(t.common?.deleteFailed || 'Delete failed.');
     }
   };
 
@@ -460,7 +608,7 @@ function App() {
     if (ok) {
       loadData();
     } else {
-      alert('Status update failed.');
+      alert(t.common?.statusUpdateFailed || 'Status update failed.');
     }
   };
 
@@ -477,7 +625,7 @@ function App() {
     if (ok) {
       loadData();
     } else {
-      alert('Delete failed.');
+      alert(t.common?.deleteFailed || 'Delete failed.');
     }
   };
 
@@ -486,15 +634,49 @@ function App() {
     if (ok) {
       loadData();
     } else {
-      alert('Status update failed.');
+      alert(t.common?.statusUpdateFailed || 'Status update failed.');
+    }
+  };
+
+  const handleEditPhysicalAntenna = (antenna: PhysicalAntenna) => {
+    openEditModal('physicalAntenna', antenna.id, {
+      code: antenna.code ?? '',
+      name: antenna.name ?? '',
+      surfaceCode: antenna.surfaceCode ?? '',
+      xPos: String(antenna.xPos ?? ''),
+      yPos: String(antenna.yPos ?? '')
+    });
+  };
+
+  const handleDeletePhysicalAntenna = async (antennaId: number) => {
+    if (!window.confirm('???????????????????????')) return;
+    const ok = await api.deletePhysicalAntenna(antennaId);
+    if (ok) {
+      loadData();
+      pushToast(t.resources?.physicalAntennaDeleted || 'Physical antenna deleted.');
+    } else {
+      alert(t.resources?.deletePhysicalFailed || 'Delete failed. Remove the child units first.');
+    }
+  };
+
+  const handlePhysicalAntennaStatusChange = async (antennaId: number, status: number) => {
+    const ok = await api.updatePhysicalAntennaStatus(antennaId, status);
+    if (ok) {
+      loadData();
+    } else {
+      alert(t.common?.statusUpdateFailed || 'Status update failed.');
     }
   };
 
   const handleEditAntenna = (antenna: AntennaUnit) => {
     openEditModal('antenna', antenna.id, {
-      code: antenna.code ?? '',
+      antennaId: String(antenna.antennaId ?? ''),
+      unitCode: antenna.unitCode ?? antenna.code ?? '',
       xPos: String(antenna.xPos ?? ''),
-      yPos: String(antenna.yPos ?? '')
+      yPos: String(antenna.yPos ?? ''),
+      surfaceCode: antenna.surfaceCode ?? '',
+      phase: String(antenna.phase ?? 0),
+      amplitude: String(antenna.amplitude ?? 1)
     });
   };
 
@@ -505,7 +687,7 @@ function App() {
       setSelectedAntenna(null);
       loadData();
     } else {
-      alert('Delete failed.');
+      alert(t.common?.deleteFailed || 'Delete failed.');
     }
   };
 
@@ -514,7 +696,7 @@ function App() {
     if (ok) {
       loadData();
     } else {
-      alert('Status update failed.');
+      alert(t.common?.statusUpdateFailed || 'Status update failed.');
     }
   };
 
@@ -526,7 +708,21 @@ function App() {
     if (editId == null) return;
     setEditError(null);
     let ok = false;
-    if (editType === 'cpu') {
+    if (editType === 'physicalAntenna') {
+      const xPos = Number(editForm.xPos);
+      const yPos = Number(editForm.yPos);
+      if (!editForm.code?.trim() || !Number.isFinite(xPos) || !Number.isFinite(yPos)) {
+        setEditError(t.resources?.batchError || 'Please provide valid input.');
+        return;
+      }
+      ok = await api.updatePhysicalAntenna(editId, {
+        code: editForm.code.trim(),
+        name: editForm.name?.trim() || undefined,
+        xPos,
+        yPos,
+        surfaceCode: editForm.surfaceCode?.trim() || undefined
+      });
+    } else if (editType === 'cpu') {
       const totalCores = Number(editForm.totalCores);
       if (!editForm.hostname?.trim() || !editForm.ipAddress?.trim() || !Number.isFinite(totalCores)) {
         setEditError(t.resources?.batchError || 'Please provide valid input.');
@@ -548,16 +744,30 @@ function App() {
         totalMemory
       });
     } else {
+      const antennaId = Number(editForm.antennaId);
       const xPos = Number(editForm.xPos);
       const yPos = Number(editForm.yPos);
-      if (!editForm.code?.trim() || !Number.isFinite(xPos) || !Number.isFinite(yPos)) {
+      const phase = Number(editForm.phase);
+      const amplitude = Number(editForm.amplitude);
+      if (
+        !Number.isFinite(antennaId) ||
+        !editForm.unitCode?.trim() ||
+        !Number.isFinite(xPos) ||
+        !Number.isFinite(yPos) ||
+        !Number.isFinite(phase) ||
+        !Number.isFinite(amplitude)
+      ) {
         setEditError(t.resources?.batchError || 'Please provide valid input.');
         return;
       }
       ok = await api.updateAntenna(editId, {
-        code: editForm.code.trim(),
+        antennaId,
+        unitCode: editForm.unitCode.trim(),
         xPos,
-        yPos
+        yPos,
+        phase,
+        amplitude,
+        surfaceCode: editForm.surfaceCode?.trim() || undefined
       });
     }
 
@@ -573,6 +783,15 @@ function App() {
   type BatchField = { key: string; label: string; placeholder?: string; numeric?: boolean };
 
   const getResourceFields = (type: BatchType): BatchField[] => {
+    if (type === 'physicalAntenna') {
+      return [
+        { key: 'code', label: t.resources?.colAntennaCode || 'Physical Code', placeholder: 'ANT-01-01' },
+        { key: 'name', label: t.resources?.colPhysicalAntennaName || 'Name', placeholder: 'Antenna-01-01' },
+        { key: 'surfaceCode', label: t.resources?.colAntennaSurface || 'Surface', placeholder: 'SURFACE-A' },
+        { key: 'xPos', label: t.resources?.colAntennaX || 'X', placeholder: '0', numeric: true },
+        { key: 'yPos', label: t.resources?.colAntennaY || 'Y', placeholder: '0', numeric: true }
+      ];
+    }
     if (type === 'cpu') {
       return [
         { key: 'hostname', label: t.resources?.colCpuHost || 'Hostname', placeholder: 'Node-01' },
@@ -587,9 +806,13 @@ function App() {
       ];
     }
     return [
-      { key: 'code', label: t.resources?.colAntennaCode || 'Antenna Code', placeholder: 'ANT-0-0' },
+      { key: 'antennaId', label: t.resources?.colParentAntennaId || 'Physical Antenna ID', placeholder: '1', numeric: true },
+      { key: 'unitCode', label: t.resources?.colUnitCode || 'Unit Code', placeholder: 'UNIT-1-1' },
       { key: 'xPos', label: t.resources?.colAntennaX || 'X', placeholder: '0', numeric: true },
-      { key: 'yPos', label: t.resources?.colAntennaY || 'Y', placeholder: '0', numeric: true }
+      { key: 'yPos', label: t.resources?.colAntennaY || 'Y', placeholder: '0', numeric: true },
+      { key: 'surfaceCode', label: t.resources?.colAntennaSurface || 'Surface', placeholder: 'SURFACE-A' },
+      { key: 'phase', label: t.resources?.colPhase || 'Phase', placeholder: '0', numeric: true },
+      { key: 'amplitude', label: t.resources?.colAmplitude || 'Amplitude', placeholder: '1', numeric: true }
     ];
   };
 
@@ -618,23 +841,42 @@ function App() {
       const values = fields.map(f => (row[f.key] ?? '').trim());
       const allEmpty = values.every(v => !v);
       if (allEmpty) continue;
-      const hasEmpty = values.some(v => !v);
-      if (hasEmpty) {
-        setBatchError(t.resources?.batchError || 'Please provide valid input.');
-        return;
-      }
-
-      if (batchType === 'antenna') {
+      if (batchType === 'physicalAntenna') {
         const xPos = Number(row.xPos);
         const yPos = Number(row.yPos);
-        if (!Number.isFinite(xPos) || !Number.isFinite(yPos)) {
+        if (!row.code?.trim() || !Number.isFinite(xPos) || !Number.isFinite(yPos)) {
           setBatchError(t.resources?.batchError || 'Please provide valid input.');
           return;
         }
-        payload.push({ code: row.code.trim(), xPos, yPos });
+        payload.push({
+          code: row.code.trim(),
+          name: row.name?.trim() || undefined,
+          xPos,
+          yPos,
+          surfaceCode: row.surfaceCode?.trim() || undefined
+        });
+      } else if (batchType === 'antenna') {
+        const antennaId = Number(row.antennaId);
+        const xPos = Number(row.xPos);
+        const yPos = Number(row.yPos);
+        const phase = Number(row.phase ?? 0);
+        const amplitude = Number(row.amplitude ?? 1);
+        if (!row.unitCode?.trim() || !Number.isFinite(antennaId) || !Number.isFinite(xPos) || !Number.isFinite(yPos) || !Number.isFinite(phase) || !Number.isFinite(amplitude)) {
+          setBatchError(t.resources?.batchError || 'Please provide valid input.');
+          return;
+        }
+        payload.push({
+          antennaId,
+          unitCode: row.unitCode.trim(),
+          xPos,
+          yPos,
+          phase,
+          amplitude,
+          surfaceCode: row.surfaceCode?.trim() || undefined
+        });
       } else if (batchType === 'cpu') {
         const totalCores = Number(row.totalCores);
-        if (!Number.isFinite(totalCores)) {
+        if (!row.hostname?.trim() || !row.ipAddress?.trim() || !Number.isFinite(totalCores)) {
           setBatchError(t.resources?.batchError || 'Please provide valid input.');
           return;
         }
@@ -645,7 +887,7 @@ function App() {
         });
       } else {
         const totalMemory = Number(row.totalMemory);
-        if (!Number.isFinite(totalMemory)) {
+        if (!row.model?.trim() || !Number.isFinite(totalMemory)) {
           setBatchError(t.resources?.batchError || 'Please provide valid input.');
           return;
         }
@@ -660,6 +902,7 @@ function App() {
 
     setBatchLoading(true);
     let ok = false;
+    if (batchType === 'physicalAntenna') ok = await api.batchCreatePhysicalAntennas(payload);
     if (batchType === 'antenna') ok = await api.batchCreateAntennas(payload);
     if (batchType === 'cpu') ok = await api.batchCreateCpus(payload);
     if (batchType === 'gpu') ok = await api.batchCreateGpus(payload);
@@ -668,6 +911,7 @@ function App() {
       setIsBatchOpen(false);
       setBatchRows([createBatchRow(batchType)]);
       loadData();
+      pushToast(t.resources?.batchSuccess || 'Resources imported successfully!');
     } else {
       setBatchError(t.resources?.batchError || 'Please provide valid input.');
     }
@@ -684,6 +928,38 @@ function App() {
             --border: #d0d7de;
             --text-main: #24292f;
             --text-muted: #57606a;
+            --tab-active-bg: #dbeafe;
+            --tab-active-border: #60a5fa;
+            --tab-active-text: #1d4ed8;
+            --tab-hover-text: #111827;
+            --tab-hover-border: #cbd5e1;
+            --tab-hover-bg: #eef2f7;
+            --progress-track: #e5edf5;
+            --progress-empty-track: repeating-linear-gradient(
+              135deg,
+              #edf2f7 0px,
+              #edf2f7 8px,
+              #f8fafc 8px,
+              #f8fafc 16px
+            );
+            --progress-empty-border: #cbd5e1;
+            --surface-soft: #eef6ff;
+            --surface-soft-alt: #f0fdfa;
+            --surface-strong: #e0f2fe;
+            --surface-hover: #e8f3ff;
+            --surface-panel: #f8fbff;
+            --surface-panel-alt: #f6fffb;
+            --surface-line: #bfdbfe;
+            --surface-line-alt: #99f6e4;
+            --surface-muted-text: #1e3a8a;
+            --surface-pill-bg: #e0f2fe;
+            --surface-pill-text: #1d4ed8;
+            --surface-pill-border: #93c5fd;
+            --surface-button-bg: #eaf4ff;
+            --surface-button-hover: #dbeafe;
+            --surface-button-text: #1e40af;
+            --surface-disabled: #f0f9ff;
+            --placeholder-text: #4f6b95;
           }
         `;
       case 'ocean':
@@ -694,6 +970,38 @@ function App() {
             --border: #223356;
             --text-main: #e6f0ff;
             --text-muted: #9fb4d1;
+            --tab-active-bg: rgba(37, 99, 235, 0.22);
+            --tab-active-border: #3b82f6;
+            --tab-active-text: #dbeafe;
+            --tab-hover-text: #ffffff;
+            --tab-hover-border: #475569;
+            --tab-hover-bg: rgba(15, 23, 42, 0.45);
+            --progress-track: #334155;
+            --progress-empty-track: repeating-linear-gradient(
+              135deg,
+              #1e293b 0px,
+              #1e293b 8px,
+              #334155 8px,
+              #334155 16px
+            );
+            --progress-empty-border: #475569;
+            --surface-soft: rgba(37, 99, 235, 0.08);
+            --surface-soft-alt: rgba(20, 184, 166, 0.08);
+            --surface-strong: rgba(37, 99, 235, 0.14);
+            --surface-hover: rgba(37, 99, 235, 0.12);
+            --surface-panel: rgba(15, 23, 42, 0.35);
+            --surface-panel-alt: rgba(17, 94, 89, 0.14);
+            --surface-line: #3b82f6;
+            --surface-line-alt: #14b8a6;
+            --surface-muted-text: #cbd5e1;
+            --surface-pill-bg: rgba(37, 99, 235, 0.12);
+            --surface-pill-text: #93c5fd;
+            --surface-pill-border: rgba(59, 130, 246, 0.35);
+            --surface-button-bg: rgba(30, 41, 59, 0.6);
+            --surface-button-hover: rgba(51, 65, 85, 0.8);
+            --surface-button-text: #e2e8f0;
+            --surface-disabled: rgba(30, 41, 59, 0.4);
+            --placeholder-text: #7dd3fc;
           }
         `;
       default: // Dark
@@ -704,6 +1012,38 @@ function App() {
             --border: #30363d;
             --text-main: #e6edf3;
             --text-muted: #8b949e;
+            --tab-active-bg: rgba(37, 99, 235, 0.22);
+            --tab-active-border: #3b82f6;
+            --tab-active-text: #dbeafe;
+            --tab-hover-text: #ffffff;
+            --tab-hover-border: #475569;
+            --tab-hover-bg: rgba(30, 41, 59, 0.4);
+            --progress-track: #334155;
+            --progress-empty-track: repeating-linear-gradient(
+              135deg,
+              #1f2937 0px,
+              #1f2937 8px,
+              #334155 8px,
+              #334155 16px
+            );
+            --progress-empty-border: #475569;
+            --surface-soft: rgba(37, 99, 235, 0.08);
+            --surface-soft-alt: rgba(20, 184, 166, 0.08);
+            --surface-strong: rgba(37, 99, 235, 0.14);
+            --surface-hover: rgba(37, 99, 235, 0.12);
+            --surface-panel: rgba(30, 41, 59, 0.3);
+            --surface-panel-alt: rgba(15, 23, 42, 0.35);
+            --surface-line: #3b82f6;
+            --surface-line-alt: #14b8a6;
+            --surface-muted-text: #cbd5e1;
+            --surface-pill-bg: rgba(37, 99, 235, 0.12);
+            --surface-pill-text: #93c5fd;
+            --surface-pill-border: rgba(59, 130, 246, 0.35);
+            --surface-button-bg: rgba(51, 65, 85, 0.45);
+            --surface-button-hover: rgba(51, 65, 85, 0.7);
+            --surface-button-text: #e2e8f0;
+            --surface-disabled: rgba(51, 65, 85, 0.3);
+            --placeholder-text: #94a3b8;
           }
         `;
     }
@@ -729,8 +1069,8 @@ function App() {
         const cpuResources = cpus;
         const gpuResources = gpus;
         const tabButtonBase = 'px-5 py-2.5 rounded-full border text-sm font-semibold tracking-wide transition-colors';
-        const activeTabClass = 'bg-blue-600/20 border-blue-500 text-blue-200 shadow-sm';
-        const inactiveTabClass = 'border-transparent theme-text-muted hover:text-white hover:border-slate-500 hover:bg-slate-800/40';
+        const activeTabClass = 'shadow-sm';
+        const inactiveTabClass = 'border-transparent theme-text-muted';
         const cpuTotalPages = Math.max(1, Math.ceil(cpuResources.length / CPU_PAGE_SIZE));
         const gpuTotalPages = Math.max(1, Math.ceil(gpuResources.length / GPU_PAGE_SIZE));
         const cpuPageStart = (cpuPage - 1) * CPU_PAGE_SIZE;
@@ -744,7 +1084,9 @@ function App() {
                   <h2 className="text-xl font-bold theme-text-main">{t.resources.title}</h2>
                   <p className="theme-text-muted text-sm">
                     {resourceTab === 'antenna'
-                      ? t.resources.subtitle
+                      ? (antennaResourceTab === 'physical'
+                        ? (t.resources?.physicalSubtitle || 'Manage physical antennas and parent topology.')
+                        : t.resources.subtitle)
                       : (t.resources?.computeSubtitle || 'Compute Resource Management')}
                   </p>
                 </div>
@@ -752,7 +1094,7 @@ function App() {
                   <div className="flex items-center gap-1">
                     <button
                         onClick={() => setResourceTab('antenna')}
-                        className={`${tabButtonBase} ${resourceTab === 'antenna' ? activeTabClass : inactiveTabClass}`}
+                        className={`${tabButtonBase} ${resourceTab === 'antenna' ? `theme-tab-active ${activeTabClass}` : `theme-tab-inactive ${inactiveTabClass}`}`}
                     >
                       {t.resources?.tabAntenna || 'Antenna Management'}
                     </button>
@@ -761,17 +1103,20 @@ function App() {
                           setResourceTab('compute');
                           setSelectedAntenna(null);
                         }}
-                        className={`${tabButtonBase} ${resourceTab === 'compute' ? activeTabClass : inactiveTabClass}`}
+                        className={`${tabButtonBase} ${resourceTab === 'compute' ? `theme-tab-active ${activeTabClass}` : `theme-tab-inactive ${inactiveTabClass}`}`}
                     >
                       {t.resources?.tabCompute || 'CPU/GPU Management'}
                     </button>
                   </div>
                   <button
                       onClick={() => {
-                        setBatchType(resourceTab === 'antenna' ? 'antenna' : 'cpu');
+                        const nextType: BatchType = resourceTab === 'antenna'
+                          ? (antennaResourceTab === 'physical' ? 'physicalAntenna' : 'antenna')
+                          : 'cpu';
+                        setBatchType(nextType);
                         setIsBatchOpen(true);
                       }}
-                      className="ml-1 px-3 py-1.5 rounded bg-slate-700/40 border theme-border text-xs hover:bg-slate-700/70 transition-colors"
+                      className="ml-1 px-3 py-1.5 rounded border theme-border text-xs transition-colors theme-surface-button"
                   >
                       {t.resources?.batchImport || 'Import Resources'}
                   </button>
@@ -779,12 +1124,129 @@ function App() {
               </div>
 
               {resourceTab === 'antenna' ? (
-                  <div className="flex h-full gap-4">
+                  <div className="flex h-full flex-col gap-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setAntennaResourceTab('physical');
+                          setSelectedAntenna(null);
+                        }}
+                        className={`${tabButtonBase} ${antennaResourceTab === 'physical' ? `theme-tab-active ${activeTabClass}` : `theme-tab-inactive ${inactiveTabClass}`}`}
+                      >
+                        {t.resources?.physicalTab || 'Physical Antenna'}
+                      </button>
+                      <button
+                        onClick={() => setAntennaResourceTab('unit')}
+                        className={`${tabButtonBase} ${antennaResourceTab === 'unit' ? `theme-tab-active ${activeTabClass}` : `theme-tab-inactive ${inactiveTabClass}`}`}
+                      >
+                        {t.resources?.unitTab || 'Antenna Unit'}
+                      </button>
+                    </div>
+
+                    {antennaResourceTab === 'physical' ? (
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div className="theme-bg-panel rounded-lg border theme-border p-4 shadow-xl space-y-3">
+                          <h3 className="text-lg font-semibold theme-text-main">{t.resources?.physicalOverview || 'Topology Overview'}</h3>
+                          <div className="grid grid-cols-1 gap-3 text-sm">
+                            <div className="rounded-lg border theme-border p-3 theme-surface-soft">
+                              <div className="theme-text-muted">{t.resources?.physicalCount || 'Physical Antennas'}</div>
+                              <div className="text-2xl font-semibold text-blue-300 mt-1">{physicalAntennas.length}</div>
+                            </div>
+                            <div className="rounded-lg border theme-border p-3 theme-surface-soft-alt">
+                              <div className="theme-text-muted">{t.resources?.unitCount || 'Antenna Units'}</div>
+                              <div className="text-2xl font-semibold text-cyan-300 mt-1">{antennas.length}</div>
+                            </div>
+                            <div className="rounded-lg border theme-border p-3 theme-surface-soft">
+                              <div className="theme-text-muted">{t.resources?.activeUnitCount || 'Active Units'}</div>
+                              <div className="text-2xl font-semibold text-emerald-300 mt-1">{antennas.filter(item => item.status === AntennaStatus.Active).length}</div>
+                            </div>
+                            <div className="rounded-lg border theme-border p-3 theme-surface-soft-alt">
+                              <div className="theme-text-muted">{t.resources?.orphanUnitCount || 'Units Without Parent'}</div>
+                              <div className="text-2xl font-semibold text-amber-300 mt-1">{antennas.filter(item => !item.antennaId).length}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="xl:col-span-2 theme-bg-panel rounded-lg border theme-border p-4 shadow-xl">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold theme-text-main">{t.resources?.physicalList || 'Physical Antenna List'}</h3>
+                            <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-xs">
+                              {physicalAntennas.length} {t.resources?.physicalTab || 'Physical Antenna'}
+                            </span>
+                          </div>
+                          {physicalAntennas.length === 0 ? (
+                            <div className="text-sm theme-text-muted py-12 text-center">
+                              {t.resources?.emptyPhysical || 'No physical antennas yet.'}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[70vh] overflow-y-auto pr-1">
+                              {physicalAntennas.map((antenna) => {
+                                const childCount = antennas.filter(unit => unit.antennaId === antenna.id).length;
+                                const statusLabel = mapPhysicalAntennaStatus(antenna.status);
+                                return (
+                                  <div key={antenna.id} className="p-4 rounded-lg border theme-border theme-surface-panel flex flex-col gap-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold theme-text-main">{antenna.code}</div>
+                                        <div className="text-xs theme-text-muted mt-1">{antenna.name || '-'} / {antenna.surfaceCode || t.resources?.unassigned || 'UNASSIGNED'}</div>
+                                      </div>
+                                      <span className={`${statusLabel === 'Online' ? 'text-emerald-400' : statusLabel === 'Busy' ? 'text-amber-400' : 'text-red-400'} text-xs font-medium`}>
+                                        {getResourceStatusLabel(statusLabel)}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                      <div className="rounded border theme-border p-2 theme-surface-soft">
+                                        <div className="theme-text-muted">ID</div>
+                                        <div className="font-mono theme-text-main mt-1">#{antenna.id}</div>
+                                      </div>
+                                      <div className="rounded border theme-border p-2 theme-surface-soft-alt">
+                                        <div className="theme-text-muted">{t.resources?.unitCount || 'Units'}</div>
+                                        <div className="font-mono theme-text-main mt-1">{childCount}</div>
+                                      </div>
+                                      <div className="rounded border theme-border p-2 theme-surface-soft col-span-2">
+                                        <div className="theme-text-muted">{t.resources?.coordinates || 'Coordinates'}</div>
+                                        <div className="font-mono theme-text-main mt-1">({antenna.xPos ?? '-'}, {antenna.yPos ?? '-'})</div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <select
+                                        value={antenna.status}
+                                        onChange={(e) => handlePhysicalAntennaStatusChange(antenna.id, Number(e.target.value))}
+                                        className="theme-bg-main theme-border border rounded-md px-2 py-1 text-xs theme-text-main"
+                                      >
+                                        <option value={0}>{t.resources?.statusOnline || 'Online'}</option>
+                                        <option value={1}>{t.resources?.physicalBusy || 'Busy'}</option>
+                                        <option value={2}>{t.resources?.statusFault || 'Fault'}</option>
+                                      </select>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => handleEditPhysicalAntenna(antenna)}
+                                          className="px-2 py-1 text-xs rounded-md theme-border border theme-text-muted transition-colors theme-surface-hover"
+                                        >
+                                          {t.resources?.resourceEdit || 'Edit'}
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeletePhysicalAntenna(antenna.id)}
+                                          className="px-2 py-1 text-xs rounded-md border border-red-500/50 text-red-300 hover:bg-red-500/10 transition-colors"
+                                        >
+                                          {t.resources?.resourceDelete || 'Delete'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex h-full gap-4">
                     <div className="flex-1 theme-bg-panel rounded-lg border theme-border p-4 shadow-xl overflow-hidden">
                       <div className="flex items-center justify-between mb-3">
                         <div className="text-sm theme-text-muted">{t.resources?.tabAntenna || 'Antenna Management'}</div>
-                        <span className="px-2 py-1 rounded bg-slate-500/10 text-slate-300 border border-slate-500/20 text-xs">
-                          Antenna: {antennas.length}
+                        <span className="px-2 py-1 rounded border text-xs theme-surface-pill">
+                          {t.resources?.antennaCount || 'Antenna'}: {antennas.length}
                         </span>
                       </div>
                       <ArrayVisualizer
@@ -800,54 +1262,54 @@ function App() {
                             <h3 className="text-lg font-bold theme-text-main">单元详情</h3>
                             <button
                                 onClick={() => setSelectedAntenna(null)}
-                                className="text-slate-400 hover:text-white transition-colors"
+                                className="theme-text-muted transition-colors hover:opacity-80"
                             >
                               <X size={20} />
                             </button>
                           </div>
 
                           <div className="space-y-6">
-                            <div className="p-4 bg-slate-700/30 rounded-lg border theme-border text-center">
-                              <span className="text-xs theme-text-muted uppercase">Unit ID</span>
+                            <div className="p-4 theme-surface-strong rounded-lg border theme-border text-center">
+                              <span className="text-xs theme-text-muted uppercase">{t.resources?.visualizer?.unitId || 'Unit ID'}</span>
                               <div className="text-3xl font-mono text-blue-400 mt-2">#{selectedAntenna.id}</div>
                             </div>
 
                             <div className="space-y-3 text-sm">
-                              <div className="flex justify-between items-center p-2 rounded hover:bg-slate-700/20">
+                              <div className="flex justify-between items-center p-2 rounded theme-surface-hover">
                                 <span className="theme-text-muted">状态</span>
                                 <span className={`font-medium ${
                                     selectedAntenna.status === AntennaStatus.Active ? 'text-orange-400' :
-                                        selectedAntenna.status === AntennaStatus.Fault ? 'text-red-400' : 'text-slate-400'
+                                        selectedAntenna.status === AntennaStatus.Fault ? 'text-red-400' : 'theme-text-main'
                                 }`}>
                           {selectedAntenna.status === AntennaStatus.Active ? '工作中' :
                               selectedAntenna.status === AntennaStatus.Fault ? '故障' : '空闲'}
                         </span>
                               </div>
 
-                              <div className="flex justify-between items-center p-2 rounded hover:bg-slate-700/20">
+                              <div className="flex justify-between items-center p-2 rounded theme-surface-hover">
                                 <span className="theme-text-muted">坐标 (X, Y)</span>
-                                <span className="font-mono text-white">
+                                <span className="font-mono theme-text-main">
                           ({selectedAntenna.xPos}, {selectedAntenna.yPos})
                         </span>
                               </div>
 
-                              <div className="flex justify-between items-center p-2 rounded hover:bg-slate-700/20">
+                              <div className="flex justify-between items-center p-2 rounded theme-surface-hover">
                                 <span className="theme-text-muted">当前相位</span>
                                 <span className="font-mono text-emerald-400">
                           {selectedAntenna.phase?.toFixed(2)}°
                         </span>
                               </div>
 
-                              <div className="flex justify-between items-center p-2 rounded hover:bg-slate-700/20">
+                              <div className="flex justify-between items-center p-2 rounded theme-surface-hover">
                                 <span className="theme-text-muted">信号幅度</span>
                                 <div className="flex items-center">
-                                  <div className="w-16 h-1.5 bg-slate-700 rounded-full mr-2 overflow-hidden">
+                                  <div className="w-16 h-1.5 theme-progress-track rounded-full mr-2 overflow-hidden">
                                     <div
                                         className="h-full bg-blue-500"
                                         style={{width: `${(selectedAntenna.amplitude || 0) * 100}%`}}
                                     ></div>
                                   </div>
-                                  <span className="font-mono text-white">{selectedAntenna.amplitude?.toFixed(1)}</span>
+                                  <span className="font-mono theme-text-main">{selectedAntenna.amplitude?.toFixed(1)}</span>
                                 </div>
                               </div>
                             </div>
@@ -870,7 +1332,7 @@ function App() {
                                 <div className="flex items-center gap-2">
                                   <button
                                     onClick={() => handleEditAntenna(selectedAntenna)}
-                                    className="px-2 py-1 text-xs rounded-md theme-border border theme-text-muted hover:text-white hover:border-slate-500 transition-colors"
+                                    className="px-2 py-1 text-xs rounded-md theme-border border theme-text-muted transition-colors theme-surface-hover"
                                   >
                                     {t.resources?.resourceEdit || 'Edit'}
                                   </button>
@@ -889,7 +1351,7 @@ function App() {
                                   <span className="text-xs theme-text-muted uppercase block mb-2">当前执行任务</span>
                                   <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded text-blue-300 text-sm">
                                     <div className="flex justify-between">
-                                      <span>Task ID:</span>
+                                      <span>{t.resources?.taskId || 'Task ID'}:</span>
                                       <span className="font-mono">{selectedAntenna.taskId}</span>
                                     </div>
                                     <div className="text-xs opacity-70 mt-1">正在运行波束合成序列...</div>
@@ -900,23 +1362,25 @@ function App() {
                         </div>
                     )}
                   </div>
+                    )}
+                  </div>
               ) : (
                   <div className="theme-bg-panel rounded-lg border theme-border p-4 shadow-xl">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-semibold theme-text-main">计算资源概览</h3>
                       <div className="flex items-center gap-2">
                         <div className="text-xs theme-text-muted">CPU/GPU 负载与状态</div>
-                        <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs">
+                        <span className="px-2 py-1 rounded border text-xs theme-surface-pill">
                           CPU: {cpuResources.length}
                         </span>
-                        <span className="px-2 py-1 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 text-xs">
+                        <span className="px-2 py-1 rounded border text-xs theme-surface-pill">
                           GPU: {gpuResources.length}
                         </span>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="border theme-border rounded-lg p-4 bg-slate-700/10 flex flex-col h-full">
+                      <div className="border theme-border rounded-lg p-4 theme-surface-soft flex flex-col h-full">
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-medium text-blue-400">CPU 节点</span>
                           <span className="text-xs theme-text-muted">{cpuResources.length} 台</span>
@@ -932,19 +1396,19 @@ function App() {
                                 const temp = load > 0 ? 35 + Math.round(load * 0.6) : 0;
                                 const statusLabel = mapStatus(cpu.status);
                                 return (
-                                    <div key={cpu.id} className="p-2 rounded border theme-border bg-slate-800/30">
+                                    <div key={cpu.id} className="p-2 rounded border theme-border theme-surface-panel flex flex-col">
                                       <div className="flex items-center justify-between text-xs">
                                         <span className="font-mono theme-text-main">{cpu.hostname || `CPU-${cpu.id}`}</span>
                                         <span className={`${
                                             statusLabel === 'Online' ? 'text-emerald-400' :
                                                 statusLabel === 'Maintenance' ? 'text-amber-400' : 'text-red-400'
-                                        }`}>{statusLabel}</span>
+                                        }`}>{getResourceStatusLabel(statusLabel)}</span>
                                       </div>
                                       <div className="mt-1 text-xs theme-text-muted">
-                                        {cpu.ipAddress} / {cpu.totalCores} cores
+                                        {cpu.ipAddress} / {cpu.totalCores} {t.resources?.cores || 'cores'}
                                       </div>
-                                      <div className="mt-2 h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-blue-500" style={{ width: `${load}%` }}></div>
+                                      <div className={`mt-2 h-1.5 w-full rounded-full overflow-hidden ${load === 0 ? 'theme-progress-empty' : 'theme-progress-track'}`}>
+                                        <div className="h-full bg-blue-500 transition-[width] duration-300" style={{ width: `${load}%` }}></div>
                                       </div>
                                       <div className="mt-1 text-xs theme-text-muted">负载 {load}% / 温度 {temp}°C</div>
                                       <div className="mt-2 flex items-center justify-between gap-2">
@@ -961,7 +1425,7 @@ function App() {
                                         <div className="flex items-center gap-2">
                                           <button
                                               onClick={() => handleEditCpu(cpu)}
-                                              className="px-2 py-1 text-xs rounded-md theme-border border theme-text-muted hover:text-white hover:border-slate-500 transition-colors"
+                                              className="px-2 py-1 text-xs rounded-md theme-border border theme-text-muted transition-colors theme-surface-hover"
                                           >
                                             {t.resources?.resourceEdit || 'Edit'}
                                           </button>
@@ -982,7 +1446,7 @@ function App() {
                           <button
                               onClick={() => setCpuPage(p => Math.max(1, p - 1))}
                               disabled={cpuPage <= 1}
-                              className="px-2 py-1 rounded theme-border border disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-500 transition-colors"
+                              className="px-2 py-1 rounded theme-border border disabled:opacity-40 disabled:cursor-not-allowed transition-colors theme-surface-hover"
                           >
                             {t.resources?.prevPage || 'Prev'}
                           </button>
@@ -992,7 +1456,7 @@ function App() {
                           <button
                               onClick={() => setCpuPage(p => Math.min(cpuTotalPages, p + 1))}
                               disabled={cpuPage >= cpuTotalPages}
-                              className="px-2 py-1 rounded theme-border border disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-500 transition-colors"
+                              className="px-2 py-1 rounded theme-border border disabled:opacity-40 disabled:cursor-not-allowed transition-colors theme-surface-hover"
                           >
                             {t.resources?.nextPage || 'Next'}
                           </button>
@@ -1000,7 +1464,7 @@ function App() {
                         </div>
                       </div>
 
-                      <div className="border theme-border rounded-lg p-4 bg-slate-700/10 flex flex-col h-full">
+                      <div className="border theme-border rounded-lg p-4 theme-surface-soft-alt flex flex-col h-full">
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-medium text-purple-400">GPU 节点</span>
                           <span className="text-xs theme-text-muted">{gpuResources.length} 张</span>
@@ -1016,19 +1480,19 @@ function App() {
                                 const temp = load > 0 ? 40 + Math.round(load * 0.7) : 0;
                                 const statusLabel = mapStatus(gpu.status);
                                 return (
-                                    <div key={gpu.id} className="p-2 rounded border theme-border bg-slate-800/30">
+                                    <div key={gpu.id} className="p-2 rounded border theme-border theme-surface-panel-alt flex flex-col">
                                       <div className="flex items-center justify-between text-xs">
                                         <span className="font-mono theme-text-main">{gpu.model || `GPU-${gpu.id}`}</span>
                                         <span className={`${
                                             statusLabel === 'Online' ? 'text-emerald-400' :
                                                 statusLabel === 'Maintenance' ? 'text-amber-400' : 'text-red-400'
-                                        }`}>{statusLabel}</span>
+                                        }`}>{getResourceStatusLabel(statusLabel)}</span>
                                       </div>
                                       <div className="mt-1 text-xs theme-text-muted">
                                         {gpu.totalMemory} GB
                                       </div>
-                                      <div className="mt-2 h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-purple-500" style={{ width: `${load}%` }}></div>
+                                      <div className={`mt-2 h-1.5 w-full rounded-full overflow-hidden ${load === 0 ? 'theme-progress-empty' : 'theme-progress-track'}`}>
+                                        <div className="h-full bg-purple-500 transition-[width] duration-300" style={{ width: `${load}%` }}></div>
                                       </div>
                                       <div className="mt-1 text-xs theme-text-muted">负载 {load}% / 温度 {temp}°C</div>
                                       <div className="mt-2 flex items-center justify-between gap-2">
@@ -1045,7 +1509,7 @@ function App() {
                                         <div className="flex items-center gap-2">
                                           <button
                                               onClick={() => handleEditGpu(gpu)}
-                                              className="px-2 py-1 text-xs rounded-md theme-border border theme-text-muted hover:text-white hover:border-slate-500 transition-colors"
+                                              className="px-2 py-1 text-xs rounded-md theme-border border theme-text-muted transition-colors theme-surface-hover"
                                           >
                                             {t.resources?.resourceEdit || 'Edit'}
                                           </button>
@@ -1066,7 +1530,7 @@ function App() {
                           <button
                               onClick={() => setGpuPage(p => Math.max(1, p - 1))}
                               disabled={gpuPage <= 1}
-                              className="px-2 py-1 rounded theme-border border disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-500 transition-colors"
+                              className="px-2 py-1 rounded theme-border border disabled:opacity-40 disabled:cursor-not-allowed transition-colors theme-surface-hover"
                           >
                             {t.resources?.prevPage || 'Prev'}
                           </button>
@@ -1076,7 +1540,7 @@ function App() {
                           <button
                               onClick={() => setGpuPage(p => Math.min(gpuTotalPages, p + 1))}
                               disabled={gpuPage >= gpuTotalPages}
-                              className="px-2 py-1 rounded theme-border border disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-500 transition-colors"
+                              className="px-2 py-1 rounded theme-border border disabled:opacity-40 disabled:cursor-not-allowed transition-colors theme-surface-hover"
                           >
                             {t.resources?.nextPage || 'Next'}
                           </button>
@@ -1146,7 +1610,7 @@ function App() {
                       </div>
                       <div>
                         <div className="theme-text-muted">{t.tasks?.detail?.status || 'Status'}</div>
-                        <div className="theme-text-main">{TaskStatus[selectedTask.status]}</div>
+                        <div className="theme-text-main">{getTaskStatusLabel(selectedTask.status)}</div>
                       </div>
                       <div>
                         <div className="theme-text-muted">{t.tasks?.detail?.antennas || 'Antennas'}</div>
@@ -1161,6 +1625,18 @@ function App() {
                         <div className="theme-text-main">{selectedTask.neededGpuMem ?? 0} GB</div>
                       </div>
                       <div>
+                        <div className="theme-text-muted">{t.tasks?.detail?.beamFrequency || 'Beam Frequency'}</div>
+                        <div className="theme-text-main">{selectedTask.beamFrequency ?? '-'}</div>
+                      </div>
+                      <div>
+                        <div className="theme-text-muted">{t.tasks?.detail?.beamGroup || 'Beam Group'}</div>
+                        <div className="theme-text-main">{selectedTask.beamGroup || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="theme-text-muted">{t.tasks?.detail?.preferredSurface || 'Preferred Surface'}</div>
+                        <div className="theme-text-main">{selectedTask.preferredSurface || '-'}</div>
+                      </div>
+                      <div>
                         <div className="theme-text-muted">{t.tasks?.detail?.duration || 'Duration'}</div>
                         <div className="theme-text-main">{selectedTask.duration}s</div>
                       </div>
@@ -1172,18 +1648,76 @@ function App() {
                         <div className="theme-text-muted">{t.tasks?.detail?.share || 'Virtual Share'}</div>
                         <div className="theme-text-main">{(selectedTask.virtualShare ?? 0).toFixed(3)}</div>
                       </div>
+                      <div>
+                        <div className="theme-text-muted">{t.tasks?.detail?.dependsOn || 'Depends On'}</div>
+                        <div className="theme-text-main">{selectedTask.dependsOnTaskIds || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="theme-text-muted">{t.tasks?.detail?.repelTasks || 'Repel Tasks'}</div>
+                        <div className="theme-text-main">{selectedTask.repelTaskIds || '-'}</div>
+                      </div>
                     </div>
+
+                    {(() => {
+                      const summary = getLatestScheduleSummary();
+                      if (!summary) return null;
+                      return (
+                        <div className="mt-4 rounded-lg border theme-border bg-slate-800/20 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <h4 className="text-sm font-semibold theme-text-main">{t.tasks?.detail?.schedulingDecision || 'Scheduling Decision'}</h4>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                                {scenarioLabel(summary.scenario)}
+                              </span>
+                              <span className="theme-text-muted">{formatLogTime(summary.time)}</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                            <div className="rounded border theme-border p-3 bg-slate-900/20">
+                              <div className="theme-text-muted mb-2">{t.tasks?.detail?.cpuPlan || 'CPU Plan'}</div>
+                              {summary.cpuPlan.length === 0 ? (
+                                <div className="theme-text-main">-</div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {summary.cpuPlan.map(item => (
+                                    <div key={item.node} className="flex items-center justify-between gap-2">
+                                      <span className="font-mono theme-text-main">{item.node}</span>
+                                      <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300">{item.cores} cores</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="rounded border theme-border p-3 bg-slate-900/20">
+                              <div className="theme-text-muted mb-2">{t.tasks?.detail?.gpuCard || 'GPU Card'}</div>
+                              <div className="font-mono theme-text-main">{summary.gpu || '-'}</div>
+                              <div className="theme-text-muted mt-2">{t.tasks?.detail?.surface || 'Surface'}</div>
+                              <div className="font-mono theme-text-main">{summary.surface || '-'}</div>
+                            </div>
+
+                            <div className="rounded border theme-border p-3 bg-slate-900/20">
+                              <div className="theme-text-muted mb-2">{t.tasks?.detail?.decisionReason || 'Decision Reason'}</div>
+                              <div className="theme-text-main break-words">{decisionLabel(summary.decision)}</div>
+                              <div className="theme-text-muted mt-2">{t.tasks?.detail?.placementQuality || 'Placement Quality'}</div>
+                              <div className="font-mono theme-text-main">{summary.score || '-'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="mt-4">
                       <div className="flex items-center justify-between mb-2">
                         <h4 className="text-sm font-semibold theme-text-main">{t.tasks?.detail?.timeline || 'Schedule Timeline'}</h4>
                         {isLogLoading && (
-                          <span className="text-xs theme-text-muted">Loading...</span>
+                          <span className="text-xs theme-text-muted">{t.tasks?.loadingLogs || 'Loading...'}</span>
                         )}
                       </div>
                       <div className="space-y-3">
                         {scheduleLogs.length === 0 && !isLogLoading && (
-                          <div className="text-xs theme-text-muted">No logs yet</div>
+                          <div className="text-xs theme-text-muted">{t.tasks?.noLogs || 'No logs yet'}</div>
                         )}
                         {scheduleLogs.length > 0 && (
                           <>
@@ -1193,7 +1727,7 @@ function App() {
                                 .filter(l => l._ts !== null)
                                 .sort((a, b) => (a._ts as number) - (b._ts as number));
                               if (logs.length === 0) {
-                                return <div className="text-xs theme-text-muted">No valid timestamps</div>;
+                                return <div className="text-xs theme-text-muted">{t.tasks?.noValidTimestamps || 'No valid timestamps'}</div>;
                               }
                               const first = logs[0]._ts as number;
                               const last = logs[logs.length - 1]._ts as number;
@@ -1208,7 +1742,7 @@ function App() {
 
                               return (
                                 <div>
-                                  <div className="h-3 w-full rounded overflow-hidden border theme-border bg-slate-800/50 flex">
+                                  <div className="h-3 w-full rounded overflow-hidden border theme-border theme-surface-panel flex">
                                     {segments.map(seg => (
                                       <div
                                         key={seg.id}
@@ -1219,10 +1753,15 @@ function App() {
                                   </div>
                                   <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
                                     {logs.map(log => (
-                                      <div key={log.id} className="flex items-center">
+                                      <div key={log.id} className="flex items-center min-w-0" title={log.detail || ''}>
                                         <span className={`h-2 w-2 rounded-full ${logDotClass(log.action)} mr-1`}></span>
                                         <span className="theme-text-main">{logLabel(log.action)}</span>
                                         <span className="theme-text-muted ml-1">{formatLogTime(log.createTime)}</span>
+                                        {log.detail && (
+                                          <span className="theme-text-muted ml-1 max-w-[340px] truncate">
+                                            · {log.detail}
+                                          </span>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -1237,13 +1776,13 @@ function App() {
               )}
 
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold theme-text-main">Active Tasks</h3>
-                <span className="text-xs theme-text-muted">Total {activeTasks.length}</span>
+                <h3 className="text-lg font-semibold theme-text-main">{t.tasks?.activeTasks || 'Active Tasks'}</h3>
+                <span className="text-xs theme-text-muted">{t.common?.total || 'Total'} {activeTasks.length}</span>
               </div>
 
               <div className="theme-bg-panel rounded-lg border theme-border overflow-hidden shadow-xl">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-700/50">
+                  <thead className="theme-surface-strong">
                   <tr>
                     <th className="p-4 text-xs font-semibold theme-text-muted uppercase tracking-wider">{t.tasks.columns.id}</th>
                     <th className="p-4 text-xs font-semibold theme-text-muted uppercase tracking-wider">{t.tasks.columns.jobName}</th>
@@ -1258,38 +1797,39 @@ function App() {
                   <tbody className="divide-y theme-border">
                   {activeTasks.length === 0 && (
                     <tr>
-                      <td className="p-4 text-xs theme-text-muted" colSpan={8}>No active tasks</td>
+                      <td className="p-4 text-xs theme-text-muted" colSpan={8}>{t.tasks?.noActiveTasks || 'No active tasks'}</td>
                     </tr>
                   )}
                   {activeTasks.map(task => (
                       <tr
                         key={task.id}
-                        className="hover:bg-slate-700/30 transition-colors cursor-pointer"
+                        className="theme-surface-hover transition-colors cursor-pointer"
                         onClick={() => setSelectedTask(task)}
                       >
                         <td className="p-4 font-mono theme-text-muted">{task.id}</td>
                         <td className="p-4 font-medium theme-text-main">{task.name}</td>
                         <td className="p-4">
                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                             task.priority >= 8 ? 'bg-red-500/20 text-red-400' :
-                                 task.priority >= 4 ? 'bg-yellow-500/20 text-yellow-400' :
+                             task.priority >= 80 ? 'bg-red-500/20 text-red-400' :
+                                 task.priority >= 40 ? 'bg-yellow-500/20 text-yellow-400' :
                                      'bg-blue-500/20 text-blue-400'
                          }`}>
-                           Lv.{task.priority}
+                           {t.tasks?.level || 'Lv.'}{task.priority}
                          </span>
                         </td>
                         <td className="p-4 theme-text-muted">{task.neededCpuCores ?? 0}</td>
                         <td className="p-4 theme-text-muted">{task.neededGpuMem ?? 0}</td>
-                        <td className="p-4 theme-text-muted">{task.resourceType || 'Antenna Array'}</td>
+                        <td className="p-4 theme-text-muted">{task.resourceType || t.resources?.antennaArray || 'Antenna Array'}</td>
                         <td className="p-4">
                          <span className={`flex items-center ${
                              task.status === TaskStatus.Running ? 'text-blue-400' :
                                  task.status === TaskStatus.Completed ? 'text-emerald-400' :
+                                     task.status === TaskStatus.Canceled ? 'text-slate-400' :
                                      task.status === TaskStatus.Pending ? 'text-amber-400' :
                                          'text-slate-400'
                          }`}>
                            {task.status === TaskStatus.Running && <span className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-2"></span>}
-                           {TaskStatus[task.status]}
+                           {getTaskStatusLabel(task.status)}
                          </span>
                         </td>
                         <td className="p-4">
@@ -1298,7 +1838,7 @@ function App() {
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleCancelTask(task.id); }}
                                     className="p-1 hover:text-red-400 theme-text-muted transition-colors"
-                                    title="Cancel task"
+                                    title={t.tasks?.cancelTask || 'Cancel task'}
                                 >
                                   <Square size={16} fill="currentColor"/>
                                 </button>
@@ -1316,13 +1856,13 @@ function App() {
               </div>
 
               <div className="flex items-center justify-between mt-2">
-                <h3 className="text-lg font-semibold theme-text-main">Past Tasks</h3>
-                <span className="text-xs theme-text-muted">Total {pastTasks.length}</span>
+                <h3 className="text-lg font-semibold theme-text-main">{t.tasks?.pastTasks || 'Past Tasks'}</h3>
+                <span className="text-xs theme-text-muted">{t.common?.total || 'Total'} {pastTasks.length}</span>
               </div>
 
               <div className="theme-bg-panel rounded-lg border theme-border overflow-hidden shadow-xl">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-700/50">
+                  <thead className="theme-surface-strong">
                   <tr>
                     <th className="p-4 text-xs font-semibold theme-text-muted uppercase tracking-wider">{t.tasks.columns.id}</th>
                     <th className="p-4 text-xs font-semibold theme-text-muted uppercase tracking-wider">{t.tasks.columns.jobName}</th>
@@ -1336,40 +1876,42 @@ function App() {
                   <tbody className="divide-y theme-border">
                   {pagedPastTasks.length === 0 && (
                     <tr>
-                      <td className="p-4 text-xs theme-text-muted" colSpan={7}>No past tasks</td>
+                      <td className="p-4 text-xs theme-text-muted" colSpan={7}>{t.tasks?.noPastTasks || 'No past tasks'}</td>
                     </tr>
                   )}
                   {pagedPastTasks.map(task => (
                       <tr
                         key={task.id}
-                        className="hover:bg-slate-700/30 transition-colors cursor-pointer"
+                        className="theme-surface-hover transition-colors cursor-pointer"
                         onClick={() => setSelectedTask(task)}
                       >
                         <td className="p-4 font-mono theme-text-muted">{task.id}</td>
                         <td className="p-4 font-medium theme-text-main">{task.name}</td>
                         <td className="p-4">
                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                             task.priority >= 8 ? 'bg-red-500/20 text-red-400' :
-                                 task.priority >= 4 ? 'bg-yellow-500/20 text-yellow-400' :
+                             task.priority >= 80 ? 'bg-red-500/20 text-red-400' :
+                                 task.priority >= 40 ? 'bg-yellow-500/20 text-yellow-400' :
                                      'bg-blue-500/20 text-blue-400'
                          }`}>
-                           Lv.{task.priority}
+                           {t.tasks?.level || 'Lv.'}{task.priority}
                          </span>
                         </td>
                         <td className="p-4 theme-text-muted">{task.neededCpuCores ?? 0}</td>
                         <td className="p-4 theme-text-muted">{task.neededGpuMem ?? 0}</td>
                         <td className="p-4">
                          <span className={`flex items-center ${
-                             task.status === TaskStatus.Completed ? 'text-emerald-400' : 'text-slate-400'
+                             task.status === TaskStatus.Completed ? 'text-emerald-400' :
+                               task.status === TaskStatus.Canceled ? 'text-slate-400' :
+                                 'text-red-400'
                          }`}>
-                           {TaskStatus[task.status]}
+                           {getTaskStatusLabel(task.status)}
                          </span>
                         </td>
                         <td className="p-4">
                           <button
                               onClick={(e) => { e.stopPropagation(); handleDeletePastTask(task.id); }}
                               className="p-1 hover:text-red-400 theme-text-muted transition-colors"
-                              title="Delete task"
+                              title={t.tasks?.deleteTask || 'Delete task'}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -1380,21 +1922,21 @@ function App() {
                 </table>
 
                 <div className="flex items-center justify-between p-4 border-t theme-border text-xs">
-                  <span className="theme-text-muted">Page {pastPage} / {pastTotalPages}</span>
+                  <span className="theme-text-muted">{t.resources?.pageLabel || 'Page'} {pastPage} / {pastTotalPages}</span>
                   <div className="flex gap-2">
                     <button
                         className="px-3 py-1 rounded border theme-border theme-text-muted hover:opacity-80 disabled:opacity-40"
                         disabled={pastPage <= 1}
                         onClick={() => setPastPage(p => Math.max(1, p - 1))}
                     >
-                      Previous
+                      {t.resources?.prevPage || 'Previous'}
                     </button>
                     <button
                         className="px-3 py-1 rounded border theme-border theme-text-muted hover:opacity-80 disabled:opacity-40"
                         disabled={pastPage >= pastTotalPages}
                         onClick={() => setPastPage(p => Math.min(pastTotalPages, p + 1))}
                     >
-                      Next
+                      {t.resources?.nextPage || 'Next'}
                     </button>
                   </div>
                 </div>
@@ -1410,7 +1952,7 @@ function App() {
           />
         );
       default:
-        return <div className="p-10 text-center theme-text-muted">Feature under construction</div>;
+        return <div className="p-10 text-center theme-text-muted">{t.common?.featureUnderConstruction || 'Feature under construction'}</div>;
     }
   };
 
@@ -1424,7 +1966,7 @@ function App() {
           </style>
           <div className="flex flex-col items-center">
             <Loader2 className="animate-spin w-10 h-10 text-blue-500 mb-4" />
-            <p className="text-slate-400 text-sm">Initializing System...</p>
+            <p className="text-slate-400 text-sm">{t.common?.initializing || 'Initializing System...'}</p>
           </div>
         </div>
     );
@@ -1441,6 +1983,63 @@ function App() {
           .theme-border { border-color: var(--border); transition: border-color 0.3s; }
           .theme-text-main { color: var(--text-main); transition: color 0.3s; }
           .theme-text-muted { color: var(--text-muted); transition: color 0.3s; }
+          .theme-tab-active {
+            background-color: var(--tab-active-bg);
+            border-color: var(--tab-active-border);
+            color: var(--tab-active-text);
+          }
+          .theme-tab-inactive:hover {
+            color: var(--tab-hover-text);
+            border-color: var(--tab-hover-border);
+            background-color: var(--tab-hover-bg);
+          }
+          .theme-progress-track {
+            background: var(--progress-track);
+          }
+          .theme-progress-empty {
+            background: var(--progress-empty-track);
+            border: 1px dashed var(--progress-empty-border);
+          }
+          .theme-surface-soft { background: var(--surface-soft); }
+          .theme-surface-soft-alt { background: var(--surface-soft-alt); }
+          .theme-surface-strong { background: var(--surface-strong); }
+          .theme-surface-panel { background: var(--surface-panel); }
+          .theme-surface-panel-alt { background: var(--surface-panel-alt); }
+          .theme-surface-hover:hover { background: var(--surface-hover); }
+          .theme-surface-pill {
+            background: var(--surface-pill-bg);
+            color: var(--surface-pill-text);
+            border-color: var(--surface-pill-border);
+          }
+          .theme-surface-button {
+            background: var(--surface-button-bg);
+            color: var(--surface-button-text);
+          }
+          .theme-surface-button:hover {
+            background: var(--surface-button-hover);
+          }
+          .theme-surface-line {
+            border-color: var(--surface-line);
+          }
+          .theme-surface-line-alt {
+            border-color: var(--surface-line-alt);
+          }
+          .theme-surface-muted-text {
+            color: var(--surface-muted-text);
+          }
+          .theme-surface-disabled {
+            background: var(--surface-disabled);
+          }
+          .theme-placeholder::placeholder {
+            color: var(--placeholder-text);
+          }
+          .theme-avatar-surface {
+            background: var(--surface-pill-bg);
+            color: var(--surface-pill-text);
+          }
+          .theme-divider-soft {
+            background: var(--surface-pill-border);
+          }
           
           body { background-color: var(--bg-main); color: var(--text-main); }
         `}
@@ -1503,7 +2102,9 @@ function App() {
                           </label>
                           {resourceTab === 'antenna' ? (
                             <div className="w-full theme-bg-main theme-border border rounded-md p-2 theme-text-main text-sm">
-                              {t.resources?.batchTypeAntenna || 'Antenna'}
+                              {antennaResourceTab === 'physical'
+                                ? (t.resources?.physicalTab || 'Physical Antenna')
+                                : (t.resources?.unitTab || t.resources?.batchTypeAntenna || 'Antenna Unit')}
                             </div>
                           ) : (
                             <select
@@ -1602,11 +2203,13 @@ function App() {
                       <div className="flex justify-between items-center p-4 border-b theme-border bg-slate-700/20">
                         <h3 className="text-lg font-bold theme-text-main">
                           {t.resources?.resourceEdit || 'Edit'}{' '}
-                          {editType === 'antenna'
-                            ? (t.resources?.batchTypeAntenna || 'Antenna')
-                            : editType === 'cpu'
-                              ? (t.resources?.batchTypeCpu || 'CPU')
-                              : (t.resources?.batchTypeGpu || 'GPU')}
+                          {editType === 'physicalAntenna'
+                            ? (t.resources?.physicalTab || 'Physical Antenna')
+                            : editType === 'antenna'
+                              ? (t.resources?.unitTab || t.resources?.batchTypeAntenna || 'Antenna Unit')
+                              : editType === 'cpu'
+                                ? (t.resources?.batchTypeCpu || 'CPU')
+                                : (t.resources?.batchTypeGpu || 'GPU')}
                         </h3>
                         <button
                             onClick={() => setIsEditOpen(false)}
