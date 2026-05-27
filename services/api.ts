@@ -138,7 +138,11 @@ export const api = {
       }
       const res = await response.json();
       if (res.code === '0') {
-        return res.data || [];
+        return (res.data || []).map((item: any) => ({
+          ...item,
+          xPos: item.xPos ?? item.xpos ?? null,
+          yPos: item.yPos ?? item.ypos ?? null,
+        }));
       }
       return [];
     } catch (error) {
@@ -470,6 +474,29 @@ export const api = {
       console.error('API Error:', error);
       return false;
     }
+  },
+
+  /**
+   * Batch submit tasks (sequential calls)
+   * Returns array of success/fail per task
+   */
+  batchSubmitTasks: async (tasks: Partial<Task>[]): Promise<{ success: number; failed: number }> => {
+    let success = 0;
+    let failed = 0;
+    for (const task of tasks) {
+      try {
+        const response = await fetch(`${BASE_URL}/task/submit`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify(task),
+        });
+        if (handleUnauthorized(response)) { failed++; continue; }
+        if (response.ok) { success++; } else { failed++; }
+      } catch {
+        failed++;
+      }
+    }
+    return { success, failed };
   },
 
   /**

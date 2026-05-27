@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { User, Lock, ArrowRight, UserPlus, Loader2, Globe, Sun, Moon, Droplets } from 'lucide-react';
+import { User, Lock, ArrowRight, UserPlus, Loader2, Globe, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { Language, Theme } from '../types';
@@ -83,14 +83,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ language, setLanguage, theme, set
 
   const toggleTheme = () => {
     if (theme === 'default') setTheme('light');
-    else if (theme === 'light') setTheme('ocean');
     else setTheme('default');
   };
 
   const getThemeIcon = () => {
     switch(theme) {
       case 'light': return <Sun size={20} />;
-      case 'ocean': return <Droplets size={20} />;
       default: return <Moon size={20} />;
     }
   };

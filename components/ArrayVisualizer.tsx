@@ -4,6 +4,7 @@ import { AntennaUnit, AntennaStatus } from '../types';
 
 interface ArrayVisualizerProps {
   data: AntennaUnit[];
+  selectedUnitId?: number | null;
   labels: {
     unitId: string;
     status: string;
@@ -18,7 +19,7 @@ interface ArrayVisualizerProps {
   onUnitClick?: (unit: AntennaUnit) => void;
 }
 
-const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitClick }) => {
+const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitClick, selectedUnitId }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -61,10 +62,10 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
     const g = svg.append("g")
       .attr("transform", `translate(${padding},${padding})`);
 
-    // Color scale based on amplitude (formerly signalStrength)
-    const colorScale = d3.scaleSequential()
-      .domain([0, 100])
-      .interpolator(d3.interpolateInferno);
+    // Color scale for active units - bright green-to-cyan for high contrast
+    const colorScale = d3.scaleLinear<string>()
+      .domain([0, 50, 100])
+      .range(['#22c55e', '#06b6d4', '#3b82f6']);
 
     // Tooltip div
     const tooltip = d3.select(wrapperRef.current)
@@ -106,12 +107,16 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
       .attr("height", rectSize)
       .attr("rx", 1.6)
       .attr("fill", d => {
-        if (d.status === AntennaStatus.Fault) return '#ef4444'; // Red
-        if (d.status === AntennaStatus.Idle) return '#334155'; // Slate 700
-        return colorScale(d.amplitude || 0);
+        if (d.status === AntennaStatus.Fault) return '#ef4444'; // Red - fault
+        if (d.status === AntennaStatus.Idle) return '#94a3b8'; // Slate 400 - light gray for idle
+        return colorScale(d.amplitude || 50); // Green/Cyan/Blue for active
       })
-      .attr("stroke", "#1e293b")
-      .attr("stroke-width", 0.6)
+      .attr("stroke", d => {
+        if (d.id === selectedUnitId) return '#ffffff'; // White border for selected
+        if (d.status === AntennaStatus.Active) return '#064e3b';
+        return '#475569';
+      })
+      .attr("stroke-width", d => d.id === selectedUnitId ? 1.5 : 0.6)
         .style("cursor", "pointer")
         .on("click", (event, d) => {
           event.stopPropagation(); // 防止冒泡
@@ -133,7 +138,7 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
             ${labels.phase || 'Phase'}: ${d.phase?.toFixed(2) || 0}<br/>
             ${labels.code || 'Code'}: ${d.code || labels.notAvailable || 'N/A'}
           `);
-        d3.select(event.currentTarget).attr("stroke", "#ffffff").attr("stroke-width", 2);
+        d3.select(event.currentTarget).attr("stroke", "#ffffff").attr("stroke-width", 1);
       })
       .on("mousemove", (event) => {
         const [x, y] = d3.pointer(event, wrapperRef.current);
@@ -141,12 +146,17 @@ const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({ data, labels, onUnitC
           .style("top", (y - 40) + "px")
           .style("left", (x + 10) + "px");
       })
-      .on("mouseout", (event) => {
+      .on("mouseout", (event, d) => {
         tooltip.style("visibility", "hidden");
-        d3.select(event.currentTarget).attr("stroke", "#1e293b").attr("stroke-width", 1);
+        if (d.id === selectedUnitId) {
+          d3.select(event.currentTarget).attr("stroke", "#ffffff").attr("stroke-width", 1.5);
+        } else {
+          const originalStroke = d.status === AntennaStatus.Active ? '#064e3b' : '#475569';
+          d3.select(event.currentTarget).attr("stroke", originalStroke).attr("stroke-width", 0.6);
+        }
       });
 
-  }, [data, labels]);
+  }, [data, labels, selectedUnitId]);
 
   return (
     <div ref={wrapperRef} className="w-full h-full relative min-h-[400px] overflow-hidden">

@@ -5,12 +5,10 @@ import {
   ListTodo,
   Settings,
   Menu,
-  Bell,
   LogOut,
   Globe,
   Sun,
   Moon,
-  Droplets
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Language, Theme } from '../types';
@@ -56,14 +54,12 @@ const Layout: React.FC<LayoutProps> = ({
 
   const toggleTheme = () => {
     if (theme === 'default') setTheme('light');
-    else if (theme === 'light') setTheme('ocean');
     else setTheme('default');
   };
 
   const getThemeIcon = () => {
     switch(theme) {
       case 'light': return <Sun size={20} />;
-      case 'ocean': return <Droplets size={20} />;
       default: return <Moon size={20} />;
     }
   };
@@ -160,18 +156,6 @@ const Layout: React.FC<LayoutProps> = ({
                 {getThemeIcon()}
               </button>
 
-              <div className="h-6 w-px bg-slate-700 mx-2"></div>
-
-              <button
-                className="relative p-2 theme-text-muted hover:text-white transition-colors"
-                onClick={onClearNotifications}
-                title={t.common?.notifications || 'Notifications'}
-              >
-                <Bell size={20} />
-                {showNotificationDot && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                )}
-              </button>
             </div>
           </header>
 

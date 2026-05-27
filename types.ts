@@ -1,5 +1,5 @@
 export type Language = 'en' | 'zh';
-export type Theme = 'default' | 'light' | 'ocean';
+export type Theme = 'default' | 'light';
 
 // Enums for easier mapping in UI
 export enum TaskStatus {
@@ -56,7 +56,7 @@ export interface ResourceNode {
   type: 'CPU' | 'GPU' | 'FPGA';
   load: number; // 0-100
   temperature: number;
-  status: 'Online' | 'Offline' | 'Maintenance';
+  status: 'Online' | 'Offline' | 'Busy';
 }
 
 export interface CpuResource {

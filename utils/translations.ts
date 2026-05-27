@@ -2,6 +2,8 @@ export const translations = {
   en: {
     appTitle: 'ArraySys',
     common: {
+      yes: 'Yes',
+      no: 'No',
       loading: 'Loading...',
       close: 'Close',
       total: 'Total',
@@ -141,6 +143,9 @@ export const translations = {
       cardCount: 'cards',
       noComputeResources: 'No compute resources',
       cores: 'cores',
+      cpuVariance: 'Load Variance',
+      maxLoad: 'Max',
+      minLoad: 'Min',
       load: 'Load',
       temperature: 'Temperature',
       confirmDeleteCpu: 'Delete this CPU resource?',
@@ -227,7 +232,8 @@ export const translations = {
         allocationRetry: 'Allocation Retry',
         schedulingDecision: 'Scheduling Decision',
         decisionReason: 'Decision Reason',
-        placementQuality: 'Placement Quality'
+        placementQuality: 'Placement Quality',
+        interpretation: 'Scheduling Interpretation',
       },
       status: {
         pending: 'Pending',
@@ -377,13 +383,14 @@ export const translations = {
       themes: {
         default: 'Dark (Default)',
         light: 'Light',
-        ocean: 'Ocean Blue'
       }
     }
   },
   zh: {
     appTitle: '阵列调度系统',
     common: {
+      yes: '是',
+      no: '否',
       loading: '加载中...',
       close: '关闭',
       total: '总计',
@@ -523,6 +530,9 @@ export const translations = {
       cardCount: '张卡',
       noComputeResources: '暂无计算资源',
       cores: '核',
+      cpuVariance: '负载方差',
+      maxLoad: '最高',
+      minLoad: '最低',
       load: '负载',
       temperature: '温度',
       confirmDeleteCpu: '确认删除该 CPU 资源吗？',
@@ -609,7 +619,8 @@ export const translations = {
         allocationRetry: '分配重试',
         schedulingDecision: '调度决策',
         decisionReason: '决策原因',
-        placementQuality: '分配质量'
+        placementQuality: '分配质量',
+        interpretation: '调度解读',
       },
       status: {
         pending: '等待中',
@@ -759,7 +770,6 @@ export const translations = {
       themes: {
         default: '深色（默认）',
         light: '浅色',
-        ocean: '海洋蓝'
       }
     }
   }

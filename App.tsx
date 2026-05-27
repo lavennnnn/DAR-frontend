@@ -22,9 +22,9 @@ const formatTime = (isoString: string) => {
   }
 };
 
-const mapStatus = (status: number): 'Online' | 'Offline' | 'Maintenance' => {
+const mapStatus = (status: number): 'Online' | 'Busy' | 'Offline' => {
   if (status === 2) return 'Offline';
-  if (status === 1) return 'Maintenance';
+  if (status === 1) return 'Busy';
   return 'Online';
 };
 
@@ -39,7 +39,7 @@ const buildResourceNodes = (cpus: CpuResource[], gpus: GpuResource[]): ResourceN
     const load = cpu.totalCores > 0 ? Math.round((cpu.usedCores / cpu.totalCores) * 100) : 0;
     const temp = load > 0 ? 35 + Math.round(load * 0.6) : 0;
     return {
-      id: `CPU-${cpu.id}`,
+      id: cpu.hostname || `CPU-${cpu.id}`,
       type: 'CPU',
       load,
       temperature: temp,
@@ -51,7 +51,7 @@ const buildResourceNodes = (cpus: CpuResource[], gpus: GpuResource[]): ResourceN
     const load = gpu.totalMemory > 0 ? Math.round((gpu.usedMemory / gpu.totalMemory) * 100) : 0;
     const temp = load > 0 ? 40 + Math.round(load * 0.7) : 0;
     return {
-      id: `GPU-${gpu.id}`,
+      id: `${gpu.model || 'GPU-' + gpu.id}`,
       type: 'GPU',
       load,
       temperature: temp,
@@ -111,7 +111,7 @@ function App() {
     if (typeof window === 'undefined') return 'default';
     try {
       const stored = localStorage.getItem(THEME_STORAGE_KEY);
-      if (stored === 'default' || stored === 'light' || stored === 'ocean') return stored;
+      if (stored === 'default' || stored === 'light') return stored;
     } catch {
       // ignore storage errors
     }
@@ -148,10 +148,9 @@ function App() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
   const t = translations[language];
-  const getResourceStatusLabel = (status: 'Online' | 'Offline' | 'Maintenance' | 'Busy') => {
+  const getResourceStatusLabel = (status: 'Online' | 'Offline' | 'Busy') => {
     if (status === 'Online') return t.resources?.statusOnline || 'Online';
     if (status === 'Offline') return t.resources?.statusOffline || 'Offline';
-    if (status === 'Maintenance') return t.resources?.statusMaintenance || 'Maintenance';
     return t.resources?.physicalBusy || 'Busy';
   };
   const getAntennaStatusLabel = (status: number) => {
@@ -962,48 +961,6 @@ function App() {
             --placeholder-text: #4f6b95;
           }
         `;
-      case 'ocean':
-        return `
-          :root {
-            --bg-main: #0b1324;
-            --bg-panel: #111a2e;
-            --border: #223356;
-            --text-main: #e6f0ff;
-            --text-muted: #9fb4d1;
-            --tab-active-bg: rgba(37, 99, 235, 0.22);
-            --tab-active-border: #3b82f6;
-            --tab-active-text: #dbeafe;
-            --tab-hover-text: #ffffff;
-            --tab-hover-border: #475569;
-            --tab-hover-bg: rgba(15, 23, 42, 0.45);
-            --progress-track: #334155;
-            --progress-empty-track: repeating-linear-gradient(
-              135deg,
-              #1e293b 0px,
-              #1e293b 8px,
-              #334155 8px,
-              #334155 16px
-            );
-            --progress-empty-border: #475569;
-            --surface-soft: rgba(37, 99, 235, 0.08);
-            --surface-soft-alt: rgba(20, 184, 166, 0.08);
-            --surface-strong: rgba(37, 99, 235, 0.14);
-            --surface-hover: rgba(37, 99, 235, 0.12);
-            --surface-panel: rgba(15, 23, 42, 0.35);
-            --surface-panel-alt: rgba(17, 94, 89, 0.14);
-            --surface-line: #3b82f6;
-            --surface-line-alt: #14b8a6;
-            --surface-muted-text: #cbd5e1;
-            --surface-pill-bg: rgba(37, 99, 235, 0.12);
-            --surface-pill-text: #93c5fd;
-            --surface-pill-border: rgba(59, 130, 246, 0.35);
-            --surface-button-bg: rgba(30, 41, 59, 0.6);
-            --surface-button-hover: rgba(51, 65, 85, 0.8);
-            --surface-button-text: #e2e8f0;
-            --surface-disabled: rgba(30, 41, 59, 0.4);
-            --placeholder-text: #7dd3fc;
-          }
-        `;
       default: // Dark
         return `
           :root {
@@ -1253,6 +1210,7 @@ function App() {
                           data={antennas}
                           labels={t.resources.visualizer}
                           onUnitClick={setSelectedAntenna}
+                          selectedUnitId={selectedAntenna?.id ?? null}
                       />
                     </div>
 
@@ -1385,6 +1343,32 @@ function App() {
                           <span className="text-sm font-medium text-blue-400">CPU 节点</span>
                           <span className="text-xs theme-text-muted">{cpuResources.length} 台</span>
                         </div>
+                        {/* CPU 负载均衡解读 */}
+                        {cpuResources.length > 0 && (() => {
+                          const loads = cpuResources
+                            .filter(c => c.status !== 2)
+                            .map(c => c.totalCores > 0 ? c.usedCores / c.totalCores : 0);
+                          if (loads.length === 0) return null;
+                          const avg = loads.reduce((a, b) => a + b, 0) / loads.length;
+                          const variance = loads.reduce((sum, l) => sum + Math.pow(l - avg, 2), 0) / loads.length;
+                          const maxLoad = Math.max(...loads);
+                          const minLoad = Math.min(...loads);
+                          const allIdle = maxLoad === 0;
+                          const totalUsed = cpuResources.filter(c => c.status !== 2).reduce((s, c) => s + c.usedCores, 0);
+                          const totalCores = cpuResources.filter(c => c.status !== 2).reduce((s, c) => s + c.totalCores, 0);
+                          return (
+                            <div className="text-xs mb-2 px-2 py-2 rounded theme-bg-panel border theme-border leading-relaxed theme-text-main">
+                              {allIdle
+                                ? (language === 'zh'
+                                  ? `${loads.length} 个节点全部空闲，共 ${totalCores} 核可用。`
+                                  : `All ${loads.length} nodes idle, ${totalCores} cores available.`)
+                                : (language === 'zh'
+                                  ? `${loads.length} 个节点共使用 ${totalUsed}/${totalCores} 核。负载方差 ${variance.toFixed(4)}（最高 ${(maxLoad * 100).toFixed(0)}%，最低 ${(minLoad * 100).toFixed(0)}%）。${variance < 0.01 ? '各节点负载均衡。' : '节点间负载存在差异。'}`
+                                  : `${loads.length} nodes using ${totalUsed}/${totalCores} cores. Variance ${variance.toFixed(4)} (max ${(maxLoad * 100).toFixed(0)}%, min ${(minLoad * 100).toFixed(0)}%). ${variance < 0.01 ? 'Load is well-balanced.' : 'Load imbalance detected.'}`)
+                              }
+                            </div>
+                          );
+                        })()}
                         <div className="flex flex-col flex-1 min-h-0">
                           <div className="flex-1 min-h-[320px] max-h-[70vh] overflow-y-auto pr-1">
                             <div className="space-y-2">
@@ -1401,7 +1385,7 @@ function App() {
                                         <span className="font-mono theme-text-main">{cpu.hostname || `CPU-${cpu.id}`}</span>
                                         <span className={`${
                                             statusLabel === 'Online' ? 'text-emerald-400' :
-                                                statusLabel === 'Maintenance' ? 'text-amber-400' : 'text-red-400'
+                                                statusLabel === 'Busy' ? 'text-amber-400' : 'text-red-400'
                                         }`}>{getResourceStatusLabel(statusLabel)}</span>
                                       </div>
                                       <div className="mt-1 text-xs theme-text-muted">
@@ -1419,7 +1403,7 @@ function App() {
                                             title={t.resources?.resourceStatus || 'Status'}
                                         >
                                           <option value={0}>{t.resources?.statusOnline || 'Online'}</option>
-                                          <option value={1}>{t.resources?.statusMaintenance || 'Maintenance'}</option>
+                                          <option value={1}>{t.resources?.physicalBusy || 'Busy'}</option>
                                           <option value={2}>{t.resources?.statusOffline || 'Offline'}</option>
                                         </select>
                                         <div className="flex items-center gap-2">
@@ -1485,7 +1469,7 @@ function App() {
                                         <span className="font-mono theme-text-main">{gpu.model || `GPU-${gpu.id}`}</span>
                                         <span className={`${
                                             statusLabel === 'Online' ? 'text-emerald-400' :
-                                                statusLabel === 'Maintenance' ? 'text-amber-400' : 'text-red-400'
+                                                statusLabel === 'Busy' ? 'text-amber-400' : 'text-red-400'
                                         }`}>{getResourceStatusLabel(statusLabel)}</span>
                                       </div>
                                       <div className="mt-1 text-xs theme-text-muted">
@@ -1503,7 +1487,7 @@ function App() {
                                             title={t.resources?.resourceStatus || 'Status'}
                                         >
                                           <option value={0}>{t.resources?.statusOnline || 'Online'}</option>
-                                          <option value={1}>{t.resources?.statusMaintenance || 'Maintenance'}</option>
+                                          <option value={1}>{t.resources?.physicalBusy || 'Busy'}</option>
                                           <option value={2}>{t.resources?.statusOffline || 'Offline'}</option>
                                         </select>
                                         <div className="flex items-center gap-2">
@@ -1674,7 +1658,7 @@ function App() {
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                            <div className="rounded border theme-border p-3 bg-slate-900/20">
+                            <div className="rounded border theme-border p-3 theme-bg-panel">
                               <div className="theme-text-muted mb-2">{t.tasks?.detail?.cpuPlan || 'CPU Plan'}</div>
                               {summary.cpuPlan.length === 0 ? (
                                 <div className="theme-text-main">-</div>
@@ -1683,26 +1667,74 @@ function App() {
                                   {summary.cpuPlan.map(item => (
                                     <div key={item.node} className="flex items-center justify-between gap-2">
                                       <span className="font-mono theme-text-main">{item.node}</span>
-                                      <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300">{item.cores} cores</span>
+                                      <span className="px-2 py-0.5 rounded bg-blue-500/10 theme-text-main font-semibold">{item.cores} cores</span>
                                     </div>
                                   ))}
                                 </div>
                               )}
                             </div>
 
-                            <div className="rounded border theme-border p-3 bg-slate-900/20">
+                            <div className="rounded border theme-border p-3 theme-bg-panel">
                               <div className="theme-text-muted mb-2">{t.tasks?.detail?.gpuCard || 'GPU Card'}</div>
                               <div className="font-mono theme-text-main">{summary.gpu || '-'}</div>
                               <div className="theme-text-muted mt-2">{t.tasks?.detail?.surface || 'Surface'}</div>
                               <div className="font-mono theme-text-main">{summary.surface || '-'}</div>
                             </div>
 
-                            <div className="rounded border theme-border p-3 bg-slate-900/20">
+                            <div className="rounded border theme-border p-3 theme-bg-panel">
                               <div className="theme-text-muted mb-2">{t.tasks?.detail?.decisionReason || 'Decision Reason'}</div>
                               <div className="theme-text-main break-words">{decisionLabel(summary.decision)}</div>
                               <div className="theme-text-muted mt-2">{t.tasks?.detail?.placementQuality || 'Placement Quality'}</div>
                               <div className="font-mono theme-text-main">{summary.score || '-'}</div>
                             </div>
+                          </div>
+
+                          {/* 调度解读 */}
+                          <div className="mt-3 rounded border theme-border p-3 theme-bg-panel">
+                            <div className="text-xs font-semibold theme-text-main mb-2">{t.tasks?.detail?.interpretation || 'Scheduling Interpretation'}</div>
+                            <p className="text-xs theme-text-main leading-relaxed">
+                              {(() => {
+                                const algo = summary.algorithm || '?';
+                                const mode = summary.mode || '?';
+                                const surface = summary.surface || '?';
+                                const nodeCount = summary.cpuPlan.length;
+                                const scores = (summary.score || '').split('/');
+                                const cpuVar = scores[0] ? parseFloat(scores[0]).toFixed(4) : '-';
+                                const gpu = summary.gpu;
+                                const crossSurface = surface.includes(',');
+
+                                switch (summary.scenario) {
+                                  case 'LOW_LATENCY':
+                                    return language === 'zh'
+                                      ? `本任务截止时间紧迫（deadline≤100ms），系统选择 ${algo} 算法以最短路径快速搜索可行阵元组合，在阵面 ${surface} 内完成分配，CPU 采用 ${mode} 模式。`
+                                      : `Tight deadline (≤100ms). System chose ${algo} for fast feasible search within surface ${surface}. CPU mode: ${mode}.`;
+                                  case 'HIGH_PRIORITY_SMALL':
+                                    return language === 'zh'
+                                      ? `本任务为高优先级小规模任务（priority≥80, 阵元≤8），系统选择 ${algo} 算法进行精确搜索，确保最低复用压力，分配在阵面 ${surface}。`
+                                      : `High-priority small task (priority≥80, antennas≤8). System chose ${algo} for exact optimal search with minimal reuse, allocated on surface ${surface}.`;
+                                  case 'GPU_ACCELERATED':
+                                    return language === 'zh'
+                                      ? `本任务需要 GPU 加速，系统采用单卡局部性分配，选中 ${gpu || '?'}，天线使用 ${algo} 算法在阵面 ${surface} 完成搜索，CPU 采用 ${mode} 紧凑模式减少跨节点开销。`
+                                      : `GPU-accelerated task. Single-card locality: selected ${gpu || '?'}. Antenna search via ${algo} on surface ${surface}. CPU in ${mode} mode to minimize cross-node overhead.`;
+                                  case 'CPU_INTENSIVE':
+                                    return language === 'zh'
+                                      ? `本任务 CPU 需求较大（≥32核），系统选择 ${mode} 模式将负载分散到 ${nodeCount} 个节点，当前 CPU 负载方差为 ${cpuVar}（越接近 0 越均衡）。天线使用 ${algo} 算法。`
+                                      : `CPU-intensive task (≥32 cores). ${mode} mode spreads load across ${nodeCount} nodes. CPU load variance: ${cpuVar} (closer to 0 = more balanced). Antenna algorithm: ${algo}.`;
+                                  case 'LARGE_ARRAY':
+                                    return language === 'zh'
+                                      ? `本任务阵元需求较大（≥24），系统选择 ${algo} 算法${crossSurface ? '跨阵面（' + surface + '）扩展搜索' : '在阵面 ' + surface + ' 内完成搜索'}，保证大规模分配的可行性和质量。`
+                                      : `Large array request (≥24 units). System chose ${algo}${crossSurface ? ' with cross-surface expansion (' + surface + ')' : ' within surface ' + surface} for feasibility at scale.`;
+                                  case 'DEPENDENCY_CONSTRAINED':
+                                    return language === 'zh'
+                                      ? `本任务存在依赖约束（depends=${selectedTask?.dependsOnTaskIds || '?'}），系统在前置任务完成后才启动调度，使用 ${algo} 算法，CPU 模式为 ${mode}。`
+                                      : `Dependency-constrained (depends=${selectedTask?.dependsOnTaskIds || '?'}). Scheduling started after prerequisites completed. Algorithm: ${algo}, CPU mode: ${mode}.`;
+                                  default:
+                                    return language === 'zh'
+                                      ? `本任务为均衡多资源类型，系统选择 ${algo} 算法在阵面 ${surface} 分配阵元，CPU 采用 ${mode} 模式分配到 ${nodeCount} 个节点，负载方差 ${cpuVar}。`
+                                      : `Balanced multi-resource task. ${algo} algorithm on surface ${surface}. CPU in ${mode} mode across ${nodeCount} nodes, variance ${cpuVar}.`;
+                                }
+                              })()}
+                            </p>
                           </div>
                         </div>
                       );
@@ -1803,7 +1835,7 @@ function App() {
                   {activeTasks.map(task => (
                       <tr
                         key={task.id}
-                        className="theme-surface-hover transition-colors cursor-pointer"
+                        className={`transition-colors cursor-pointer ${selectedTask?.id === task.id ? 'bg-blue-500/10' : 'theme-surface-hover'}`}
                         onClick={() => setSelectedTask(task)}
                       >
                         <td className="p-4 font-mono theme-text-muted">{task.id}</td>
@@ -1882,7 +1914,7 @@ function App() {
                   {pagedPastTasks.map(task => (
                       <tr
                         key={task.id}
-                        className="theme-surface-hover transition-colors cursor-pointer"
+                        className={`transition-colors cursor-pointer ${selectedTask?.id === task.id ? 'bg-blue-500/10' : 'theme-surface-hover'}`}
                         onClick={() => setSelectedTask(task)}
                       >
                         <td className="p-4 font-mono theme-text-muted">{task.id}</td>
@@ -1949,6 +1981,8 @@ function App() {
             t={t}
             pushNotifications={pushNotifications}
             setPushNotifications={setPushNotifications}
+            onDataChange={loadData}
+            onNavigate={setActiveTab}
           />
         );
       default:
