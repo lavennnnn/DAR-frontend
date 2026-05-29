@@ -278,8 +278,9 @@ function App() {
                 : a
         ));
       }
-      // Refresh CPU/GPU load when a task starts
+      // Refresh CPU/GPU load and physical antennas when a task starts
       loadResources();
+      api.fetchPhysicalAntennas().then(setPhysicalAntennas);
       if (selectedTask && selectedTask.id === taskId) {
         fetchScheduleLogs(taskId);
       }
@@ -297,8 +298,9 @@ function App() {
               ? { ...a, status: AntennaStatus.Idle, taskId: null }
               : a
       ));
-      // Refresh CPU/GPU load when a task ends
+      // Refresh CPU/GPU load and physical antennas when a task ends
       loadResources();
+      api.fetchPhysicalAntennas().then(setPhysicalAntennas);
       // Refresh tasks to get updated remainingSeconds/virtualShare
       loadData();
       if (selectedTask && selectedTask.id === taskId) {
@@ -318,6 +320,7 @@ function App() {
       ));
 
       loadResources();
+      api.fetchPhysicalAntennas().then(setPhysicalAntennas);
       loadData();
       if (selectedTask && selectedTask.id === taskId) {
         fetchScheduleLogs(taskId);
